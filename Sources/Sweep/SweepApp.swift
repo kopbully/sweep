@@ -52,7 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 // MARK: - 模块路由
 
 enum Module: String, Hashable, CaseIterable, Identifiable {
-    case clean, uninstall, optimize, analyze, status
+    case clean, uninstall, optimize, startup, analyze, status
     var id: String { rawValue }
 
     var title: String {
@@ -60,6 +60,7 @@ enum Module: String, Hashable, CaseIterable, Identifiable {
         case .clean: return "清理"
         case .uninstall: return "卸载"
         case .optimize: return "优化"
+        case .startup: return "启动项"
         case .analyze: return "分析"
         case .status: return "监控"
         }
@@ -70,6 +71,7 @@ enum Module: String, Hashable, CaseIterable, Identifiable {
         case .clean: return "wind.snow"
         case .uninstall: return "arrow.uturn.down"
         case .optimize: return "bolt.horizontal"
+        case .startup: return "power"
         case .analyze: return "chart.pie"
         case .status: return "waveform.path.ecg"
         }
@@ -80,6 +82,7 @@ enum Module: String, Hashable, CaseIterable, Identifiable {
         case .clean: return "扫描可再生缓存、日志与废纸篓"
         case .uninstall: return "移除应用并追踪残留文件"
         case .optimize: return "一键运行安全的维护任务"
+        case .startup: return "管理登录与开机自动运行的后台程序"
         case .analyze: return "看看磁盘空间都去哪了"
         case .status: return "CPU · 内存 · 磁盘 · 网络 · 电源"
         }
@@ -152,6 +155,7 @@ struct ShellView: View {
         case .clean: CleanView(engine: cleanEngine)
         case .uninstall: UninstallView(engine: uninstallEngine)
         case .optimize: OptimizeView()
+        case .startup: StartupView()
         case .analyze: AnalyzeView(engine: analyzeEngine)
         case .status: StatusView()
         }

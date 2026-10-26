@@ -23,6 +23,13 @@ open Sweep.app
 
 要求：macOS 13+，Apple Command Line Tools（无需完整 Xcode）。
 
+## 0.4.0 启动项 · 规则扩容 · 删除闸门修复
+
+- 新增 **启动项** 模块：扫描 `~/Library/LaunchAgents`、`/Library/LaunchAgents`、`/Library/LaunchDaemons`，解析 Label / 程序路径 / RunAtLoad，并用 `launchctl list` 标出运行状态。用户级代理可停用与恢复（`launchctl bootout` + 把 plist 移入 `~/Library/Application Support/Sweep/disabled-launch-agents`，不删除文件）；系统代理与守护进程只读展示，提示需管理员权限。
+- **清理规则从 13 类扩到 25 类**：新增 Cargo、Go 构建缓存、CocoaPods、SwiftPM、JetBrains、VS Code 缓存、Yarn、pnpm 缓存与全局存储（复核项）、Playwright/Cypress/Selenium、electron-builder、Xcode 辅助缓存。所有新增路径都先过 `PathSafety` 白名单，`~/Library/Application Support/Code` 只放行 4 个缓存子目录，设置与工作区仍在保护区。
+- **修复删除闸门**：`PathSafety.protected` 里的根目录 `/` 参与了前缀匹配，导致**每一条绝对路径都被判为受保护**，`Remover` 全线拒绝。日志里累计 618 条 `SKIP(protected)`，也就是说 0.3.x 的「优化」一键任务、分析页「移入废纸篓」、卸载残留清理实际上从未成功执行。现在根目录只做精确匹配，白名单照旧生效。
+- 规则覆盖面的参考来自 [MangoDisk](https://github.com/harry0703/MangoDisk)（GPL-3.0）：只借鉴了路径清单与「可重建」结论，未复制其代码或 TOML 规则文件，Sweep 仍是 MIT。
+
 ## 0.3.1 单实例与重复悬浮窗
 
 桌面只应出现一个黑洞悬浮窗。0.3.1 在启动早期用 `flock` 抢占 `~/Library/Application Support/Sweep/instance.lock`：第二个 Sweep 进程会唤起已有窗口后立刻退出，不再各自创建一个黑洞面板。锁由内核持有，进程崩溃会自动释放，可用 `SWEEP_ALLOW_MULTI_INSTANCE=1` 临时绕过（仅用于调试）。

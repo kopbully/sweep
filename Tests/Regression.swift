@@ -40,6 +40,53 @@ struct Regression {
         primary.release()
         check(secondary.acquire(), "the lock is reusable once the first instance quits")
         secondary.release()
+
+        // 启动项：plist 解析、launchctl 输出解析、停用目录位置
+        let agent = root.appendingPathComponent("com.example.agent.plist")
+        let agentPlist: [String: Any] = ["Label": "com.example.agent",
+                                         "ProgramArguments": ["/bin/echo", "hi"],
+                                         "RunAtLoad": true]
+        try PropertyListSerialization.data(fromPropertyList: agentPlist, format: .xml, options: 0)
+            .write(to: agent)
+        let parsedAgent = LaunchPlist.parse(url: agent)
+        check(parsedAgent?.label == "com.example.agent", "launch agent label comes from the plist")
+        check(parsedAgent?.program == "/bin/echo", "launch agent program falls back to ProgramArguments[0]")
+        check(parsedAgent?.runAtLoad == true, "launch agent RunAtLoad flag is preserved")
+        let linkAgent = root.appendingPathComponent("linked-agent.plist")
+        try fm.createSymbolicLink(at: linkAgent, withDestinationURL: agent)
+        check(LaunchPlist.parse(url: linkAgent) == nil, "symlinked launch agents stay unmanaged")
+        check(LaunchPlist.disabledStoreDirectory(home: "/Users/sample")
+              == "/Users/sample/Library/Application Support/Sweep/disabled-launch-agents",
+              "disabled launch agents are moved inside Sweep's own support directory")
+        let listing = "PID\tStatus\tLabel\n42\t0\tcom.example.agent\n-\t0\tcom.example.other\n"
+        check(LaunchPlist.loadedLabels(from: listing) == ["com.example.agent", "com.example.other"],
+              "launchctl list output yields every loaded label")
+
+        // 清理目录：新增类别必须落在永久删除白名单内，且不能顺带放宽用户资料
+        check(Set(CleanCatalog.categories.map(\.id)).count == CleanCatalog.categories.count,
+              "clean categories keep unique identifiers")
+        check(CleanCatalog.categories.count >= 24, "clean catalog keeps the expanded category coverage")
+        check(PathSafety.canDelete(NSHomeDirectory() + "/Library/Application Support/Code/Cache"),
+              "VS Code cache directory is whitelisted for permanent deletion")
+        check(PathSafety.canDelete(NSHomeDirectory() + "/Library/pnpm/store"),
+              "pnpm content store is whitelisted for the explicit review item")
+        check(!PathSafety.canDelete(NSHomeDirectory() + "/Library/Application Support/Code/User/settings.json"),
+              "VS Code settings and workspace data stay protected")
+        check(CleanCatalog.scanTargets().allSatisfy {
+            PathSafety.canDelete($0.path) || !fm.fileExists(atPath: $0.path)
+        }, "every scannable cleanup target is covered by the safety whitelist")
+
+        // 删除闸门：根目录不能再把每条绝对路径都吃掉
+        check(PathSafety.isProtected("/"), "filesystem root stays protected")
+        check(PathSafety.isProtected(NSHomeDirectory() + "/Documents"), "Documents root stays protected")
+        check(PathSafety.canDelete(NSHomeDirectory() + "/Library/Caches/pip"),
+              "known cache roots stay permanently deletable")
+        check(!PathSafety.canDelete(NSHomeDirectory() + "/Documents/secret.txt"),
+              "permanent deletion still refuses paths outside the whitelist")
+        check(!PathSafety.canDelete("/System/Library/Kernels/kernel"),
+              "system files cannot reach the permanent deletion path")
+        check(PathSafety.canTrash(NSHomeDirectory() + "/Desktop/note.txt"),
+              "trash stays available for files the user picks under home")
         func file(_ name: String, bytes: Int) throws -> URL {
             let url = root.appendingPathComponent(name)
             try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

@@ -49,6 +49,13 @@ enum PathSafety {
         NSHomeDirectory() + "/.gradle",
         NSHomeDirectory() + "/.m2",
         NSHomeDirectory() + "/.cargo",
+        // VS Code 只放行明确的缓存目录，设置/插件/工作区仍在保护范围内
+        NSHomeDirectory() + "/Library/Application Support/Code/Cache",
+        NSHomeDirectory() + "/Library/Application Support/Code/CachedData",
+        NSHomeDirectory() + "/Library/Application Support/Code/GPUCache",
+        NSHomeDirectory() + "/Library/Application Support/Code/Code Cache",
+        // pnpm 内容寻址仓库（用户显式审阅后才可清理）
+        NSHomeDirectory() + "/Library/pnpm/store",
         "/private/var/log",
     ]
 
@@ -71,8 +78,10 @@ enum PathSafety {
         for banned in protected {
             let b = (banned as NSString).standardizingPath
             if p == b { return true }
+            // 根目录 "…" 只参与精确匹配：它的字符串前缀就是 "/"，
+            // 若参与前缀匹配会把每一条绝对路径都判为受保护，删除闸门将永久失效。
+            if b == "/" { continue }
             if p.hasPrefix(b) && b.hasSuffix("/") { return true } // 根目录 "/"+前缀
-            if b == "/" && p == "" { return true }
         }
         return false
     }
