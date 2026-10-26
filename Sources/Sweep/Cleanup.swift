@@ -13,9 +13,12 @@ struct CleanCategory: Identifiable, Hashable, Sendable {
     let appBundleIDs: [String]
     let recommended: Bool
     let reviewReason: String?
+    /// true 表示默认不勾选，必须用户自己点选（如废纸篓：删掉就真的没了）
+    let explicitOnly: Bool
 
     init(id: String, title: String, subtitle: String, paths: [String], icon: String, safe: Bool,
-         appBundleIDs: [String] = [], recommended: Bool = true, reviewReason: String? = nil) {
+         appBundleIDs: [String] = [], recommended: Bool = true, reviewReason: String? = nil,
+         explicitOnly: Bool = false) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -25,6 +28,7 @@ struct CleanCategory: Identifiable, Hashable, Sendable {
         self.appBundleIDs = appBundleIDs
         self.recommended = recommended && safe
         self.reviewReason = reviewReason
+        self.explicitOnly = explicitOnly
     }
 }
 
@@ -39,6 +43,8 @@ struct CacheItem: Identifiable, Hashable, Sendable {
     let fileCount: Int
     let canSelect: Bool
     let recommended: Bool
+    /// 扫描完成后是否默认勾选：可清理、属于安全类别、且不属于必须手动确认的类别。
+    let autoSelected: Bool
     let reason: String?
     let incomplete: Bool
     let hasExternalHardLinks: Bool
@@ -47,7 +53,8 @@ struct CacheItem: Identifiable, Hashable, Sendable {
 
     init(id: String, name: String, path: String, category: String, size: Int64,
          selected: Bool = false, allocatedSize: Int64 = 0, fileCount: Int = 0,
-         canSelect: Bool = true, recommended: Bool = false, reason: String? = nil,
+         canSelect: Bool = true, recommended: Bool = false, autoSelected: Bool = false,
+         reason: String? = nil,
          incomplete: Bool = false, hasExternalHardLinks: Bool = false,
          estimatedReclaimableSize: Int64 = 0, snapshot: CleanupSnapshot? = nil) {
         self.id = id
@@ -60,6 +67,7 @@ struct CacheItem: Identifiable, Hashable, Sendable {
         self.fileCount = fileCount
         self.canSelect = canSelect
         self.recommended = recommended
+        self.autoSelected = autoSelected && canSelect
         self.reason = reason
         self.incomplete = incomplete
         self.hasExternalHardLinks = hasExternalHardLinks
@@ -171,7 +179,7 @@ enum CleanCatalog {
                       paths: ["~/Library/Caches/Microsoft Edge"], icon: "globe", safe: true,
                       appBundleIDs: ["com.microsoft.edgemac", "com.microsoft.edgemac.Beta", "com.microsoft.edgemac.Dev", "com.microsoft.edgemac.Canary"]),
         CleanCategory(id: "safari", title: "Safari 缓存", subtitle: "仅明确缓存，保留网页资料与登录状态",
-                      paths: ["~/Library/Caches/com.apple.Safari", "~/Library/Containers/com.apple.Safari/Data/Library/Caches/com.apple.Safari"],
+                      paths: ["~/Library/Caches/com.apple.Safari"],
                       icon: "globe", safe: true, appBundleIDs: ["com.apple.Safari", "com.apple.SafariTechnologyPreview"]),
         CleanCategory(id: "appCaches", title: "其他应用缓存", subtitle: "逐项检查；不默认推荐清理",
                       paths: ["~/Library/Caches/*"], icon: "shippingbox", safe: true, recommended: false,
@@ -952,6 +960,7 @@ enum CleanupScanner {
                                            path: target.path, category: target.category.title, size: sizes.logical,
                                            allocatedSize: sizes.allocated, fileCount: sizes.files, canSelect: selectable,
                                            recommended: selectable && target.category.recommended,
+                                           autoSelected: selectable && target.category.safe && !target.category.explicitOnly,
                                            reason: reasons.isEmpty ? nil : reasons.joined(separator: "；"),
                                            incomplete: !measurement.complete, hasExternalHardLinks: measurement.hasExternalHardLinks,
                                            estimatedReclaimableSize: sizes.reclaimable, snapshot: snapshot))

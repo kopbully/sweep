@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Build Sweep.app bundle (ad-hoc signed)
+# Build Sweep.app bundle（默认用本地固定证书签名，见 Scripts/setup_signing.sh）
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -30,9 +30,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key>
     <string>com.sweep.macos</string>
     <key>CFBundleVersion</key>
-    <string>0.6.2</string>
+    <string>0.6.5</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.6.2</string>
+    <string>0.6.5</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
@@ -43,9 +43,26 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <true/>
     <key>NSHumanReadableCopyright</key>
     <string>MIT License</string>
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>Sweep 需要读取桌面以统计大文件与重复文件；只在你打开的模块里使用，不上传任何内容。</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Sweep 需要读取文稿以统计大文件与重复文件；只在你打开的模块里使用，不上传任何内容。</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>Sweep 需要读取下载目录以找出安装包与重复文件；只在你打开的模块里使用，不上传任何内容。</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>Sweep 仅在你选择外接磁盘做空间分析时读取该磁盘。</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>少数维护动作（刷新 DNS、修剪系统日志）需要提权执行一条命令；点击后系统会请求一次密码。</string>
 </dict>
 </plist>
 PLIST
 
-codesign --force --sign - "$APP"
+# 稳定签名：固定证书让 TCC 授权可跨重打包复用；没有证书时退回 ad-hoc。
+if security find-identity -p codesigning -v 2>/dev/null | grep -q "Sweep Local Signing"; then
+    codesign --force --sign "Sweep Local Signing" --identifier com.sweep.macos "$APP"
+    echo "🔏 签名身份：Sweep Local Signing"
+else
+    codesign --force --sign - "$APP"
+    echo "🔏 签名身份：ad-hoc（运行 Scripts/setup_signing.sh 可改用固定证书）"
+fi
 echo "✅ Built $APP — 双击运行，或: open $APP"

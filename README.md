@@ -4,7 +4,7 @@
 
 | 模块 | 功能 |
 |------|------|
-| **清理 Clean** | 扫描浏览器与应用缓存、Xcode DerivedData/模拟器缓存、npm/pip/uv/Homebrew/Gradle 等 25 类可重建缓存。默认不勾选；少量明确缓存可加入推荐选择，其他应用缓存逐项复核后才可清理。 |
+| **清理 Clean** | 扫描浏览器与应用缓存、Xcode DerivedData/模拟器缓存、npm/pip/uv/Homebrew/Gradle 等 25 类可重建缓存。扫描完成后默认勾选全部可清理项，主按钮直接显示项数与体积；被占用、只读或需手动确认的项目默认不勾。 |
 | **大文件 Large files** | 按 100 MB / 500 MB / 1 GB / 5 GB 门槛找出单个文件，边扫边出结果，可批量移入废纸篓。隐藏目录与缓存树不在范围内。 |
 | **重复文件 Duplicates** | 大小分桶 → 首尾 64 KB 摘要 → 全文件 SHA256 三段校验，只有逐字节一致才归组；默认保留修改时间最早的一份。 |
 | **磁盘分析 Analyze** | 列表 / 矩形树图 / 旭日图三种视图看空间去向，逐层钻取，右键可移入废纸篓。 |
@@ -27,6 +27,15 @@ open Sweep.app
 ```
 
 要求：macOS 13+，Apple Command Line Tools（无需完整 Xcode）。
+
+## 0.6.5 清理真的会清、授权只要给一次
+
+- **默认勾选全部可清理项**：以前只勾 `recommended`（pip / SwiftPM 这类保守项），120 个候选里只勾中 2 项 17 MB，点清理几乎看不出变化。现在新增 `CacheItem.autoSelected`：可清理 + 类别安全 + 非 `explicitOnly` 就默认勾上，主按钮直接写「清理 N 项 · X GB」，空选时点主按钮会自动全选。
+- **`explicitOnly` 类别**：默认永不勾选（留给废纸篓这类删掉就找不回的目标）。
+- **稳定的代码签名**：`Scripts/setup_signing.sh` 生成固定的本地证书 "Sweep Local Signing"，`make_app.sh` 优先用它签名。designated requirement 变成 `identifier "com.sweep.macos" and certificate root = H"…"`，跨重打包不变，**系统授权（桌面/文稿/下载、其他应用数据）只需给一次**；此前用 ad-hoc 签名，每次重新打包 cdhash 都变，等于每次都换了个 App，授权反复失效。缺证书时仍退回 ad-hoc。
+- 移除 Safari 容器内缓存路径（需要「完全磁盘访问权限」才能读，只会反复报读取受限）；`Info.plist` 补 `NSAppleEventsUsageDescription`。
+- 优化页里需要提权的任务，点击后先说明「接下来会弹一次系统密码窗口」，不再让人莫名撞上授权框。
+- 详见 `verification/clean-and-permissions-0.6.5.md`。
 
 ## 0.6.1 / 0.6.2 桌面黑洞：尺寸与交互
 

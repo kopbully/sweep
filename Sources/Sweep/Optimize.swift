@@ -114,6 +114,7 @@ private func runAdmin(_ shell: String, done: @escaping @Sendable (String, Bool) 
 
 struct OptimizeView: View {
     @StateObject private var engine = OptimizeRunner()
+    @State private var pendingAdmin: OptimizeTask?
 
     var body: some View {
         ScrollView {
@@ -140,6 +141,15 @@ struct OptimizeView: View {
             .padding(20)
         }
         .background(Theme.bg)
+        .alert(item: Binding(get: { pendingAdmin }, set: { pendingAdmin = $0 })) { task in
+            Alert(title: Text("需要管理员权限"),
+                  message: Text("「\(task.title)」会用系统授权执行一条命令。\n\n接下来会弹出系统密码窗口，输入一次当前用户密码即可；这条命令只做一件事，不会申请常驻权限。"),
+                  primaryButton: .default(Text("继续并输入密码")) {
+                      if let task = pendingAdmin { engine.run(task: task) }
+                      pendingAdmin = nil
+                  },
+                  secondaryButton: .cancel(Text("取消")) { pendingAdmin = nil })
+        }
     }
 
     private var runAllCard: some View {
@@ -207,7 +217,11 @@ struct OptimizeView: View {
                 }
                 Spacer()
                 Button {
-                    engine.run(task: task)
+                    if engine.runningTask == nil, task.needsAdmin {
+                        pendingAdmin = task
+                    } else {
+                        engine.run(task: task)
+                    }
                 } label: {
                     Text(engine.results[task.id] != nil ? "再跑一次" : "运行")
                         .font(.system(size: 11, weight: .medium))

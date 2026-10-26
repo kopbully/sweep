@@ -206,10 +206,15 @@ struct Regression {
                           icon: "", safe: true, appBundleIDs: ["com.example.known"]),
             CleanCategory(id: "appCaches", title: "Other app caches", subtitle: "", paths: ["~/Library/Caches/*"],
                           icon: "", safe: true, recommended: false, reviewReason: "Review each app cache"),
+            // explicitOnly：即使可清理也不默认勾选（例如废纸篓里可能还有要找回的文件）
+            CleanCategory(id: "explicit", title: "Explicit only", subtitle: "",
+                          paths: ["~/Library/Caches/com.example.Explicit"], icon: "", safe: true,
+                          recommended: false, explicitOnly: true),
         ]
         _ = try cleanupFile("Library/Caches/com.example.Known/data", bytes: 2048)
         _ = try cleanupFile("Library/Caches/com.example.Active/data", bytes: 512)
         _ = try cleanupFile("Library/Caches/com.example.Manual/data", bytes: 1024)
+        _ = try cleanupFile("Library/Caches/com.example.Explicit/data", bytes: 256)
         _ = try cleanupFile("Library/Caches/com.example.RemoveMe/data", bytes: 1536)
         _ = try cleanupFile("Library/Caches/com.sweep.macos/data", bytes: 128)
         _ = try cleanupFile("Library/Caches/com.example.icloud/data", bytes: 64)
@@ -238,6 +243,10 @@ struct Regression {
               "cleanup scan recommends known cache without selecting it")
         check(manualCandidate?.canSelect == true && manualCandidate?.recommended == false,
               "generic app caches require manual selection")
+        check(knownCandidate?.autoSelected == true && manualCandidate?.autoSelected == true,
+              "every safe selectable cache is preselected, not just the conservative recommended set")
+        check(cleanupScan.items.first { $0.path.hasSuffix("/com.example.Explicit") }?.autoSelected == false,
+              "explicit-only categories are never preselected")
         check(activeCandidate?.canSelect == false && activeCandidate?.reason?.contains("正在运行") == true,
               "running app cache is locked")
         check(appCandidate?.canSelect == false && appCandidate?.reason?.contains("排除") == true,
@@ -364,7 +373,18 @@ struct Regression {
         let engine = CleanEngine(categories: [engineCategory], home: engineHome.path)
         engine.scan()
         for _ in 0..<200 where engine.busy { try? await Task.sleep(nanoseconds: 10_000_000) }
-        check(engine.items.count == 1 && engine.selectedItems.isEmpty, "cleanup UI starts with no selected items")
+        // 首次扫描后自动勾选全部可清理项：只勾「推荐项」时，120 个候选里只勾中 17MB，
+        // 用户点清理几乎看不出变化，会以为功能坏了。
+        check(engine.items.count == 1 && engine.selectedItems.count == 1,
+              "cleanup UI preselects every eligible candidate after the first scan")
+        engine.deselectAll()
+        check(engine.selectedItems.isEmpty, "deselect all clears the preselection")
+        check(engine.prepareForCleaning().count == 1 && engine.selectedItems.count == 1,
+              "one-click clean re-selects every eligible candidate when nothing is chosen")
+        check(engine.selectableCount == engine.items.count && engine.selectableTotal > 0,
+              "selectable totals describe every eligible candidate")
+        engine.selectLargest(1)
+        check(engine.selectedItems.count == 1, "select largest keeps the picked count bounded")
         engine.selectRecommended()
         check(engine.selectedItems.count == 1, "select recommended includes only reviewed eligible items")
         engine.cleanConfirmed(engine.selectedItems)

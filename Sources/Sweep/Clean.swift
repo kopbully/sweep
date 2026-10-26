@@ -52,6 +52,8 @@ final class CleanEngine: ObservableObject {
 
     private var scanID = UUID()
     private var cleanID = UUID()
+    /// 首次扫描后只自动勾选一次，之后保留用户自己的选择
+    private var defaultsApplied = false
     private var scanToken: CleanupCancellationToken?
     private var cleanToken: CleanupCancellationToken?
     private var scanTask: Task<Void, Never>?
@@ -71,7 +73,7 @@ final class CleanEngine: ObservableObject {
     var selectedAllocated: Int64 { selectedItems.reduce(0) { $0 + $1.allocatedSize } }
     var totalSize: Int64 { items.reduce(0) { $0 + $1.size } }
 
-    func scan() {
+    func scan(keepMessage: Bool = false) {
         guard !busy else { return }
         let id = UUID()
         scanID = id
@@ -83,7 +85,7 @@ final class CleanEngine: ObservableObject {
         let home = home
         scanning = true
         progress = nil
-        lastMessage = "正在检查已知缓存目录…"
+        if !keepMessage { lastMessage = "正在检查已知缓存目录…" }
         scanTask = Task { [weak self] in
             let result = await Task.detached(priority: .userInitiated) {
                 CleanupScanner.scan(categories: categories, home: home, runningBundleIDs: running, cancellation: token) { info in
@@ -108,18 +110,30 @@ final class CleanEngine: ObservableObject {
                 }
                 return updated
             }
+            // 首次扫描把「所有可清理项」勾上，而不是只勾 pip/SwiftPM 这类安全项：
+            // 之前只勾推荐项，可清理 120 项里只勾中 2 项 17MB，用户点清理几乎看不出变化，
+            // 以为功能坏了。缓存目录本身就是可再生的，默认全选更符合"腾空间"的预期。
+            if !defaultsApplied {
+                for index in self.items.indices {
+                    self.items[index].selected = self.items[index].autoSelected
+                }
+                defaultsApplied = true
+            }
             self.scanIssues = result.issues.map { "\($0.path)：\($0.message)" }
             self.progress = result.progress
             self.hasScanned = true
             let timing = String(format: "%.1f", result.elapsed)
-            if !self.scanIssues.isEmpty {
+            if keepMessage, let kept = self.lastMessage {
+                self.lastMessage = kept
+            } else if !self.scanIssues.isEmpty {
                 self.lastMessage = "扫描完成（\(timing) 秒），\(self.scanIssues.count) 处读取受限；结果包含已读取的内容。"
             } else if self.items.isEmpty {
                 self.lastMessage = "扫描完成（\(timing) 秒），已知缓存目录中没有发现候选。"
             } else {
                 self.lastMessage = "扫描完成（\(timing) 秒）：\(self.items.count) 项，逻辑大小合计 \(self.totalSize.bytesText)。"
             }
-            OperationsLog.write("CLEAN SCAN items=\(self.items.count) issues=\(self.scanIssues.count)")
+            let autoPicked = self.items.filter(\.selected)
+            OperationsLog.write("CLEAN SCAN items=\(self.items.count) issues=\(self.scanIssues.count) selected=\(autoPicked.count) selectedBytes=\(autoPicked.reduce(Int64(0)) { $0 + $1.size })")
         }
     }
 
@@ -143,19 +157,68 @@ final class CleanEngine: ObservableObject {
         for index in items.indices { items[index].selected = items[index].canSelect && items[index].recommended }
     }
 
+    /// 勾上所有真正可清理的项（跳过被占用、只读、需要手动确认的）
+    func selectAllEligible() {
+        guard !busy else { return }
+        for index in items.indices { items[index].selected = items[index].canSelect }
+    }
+
     func deselectAll() {
         guard !busy else { return }
         for index in items.indices { items[index].selected = false }
     }
 
+    /// 可选总量：让用户一眼看到"最多能清出多少"，而不是只看已勾选的 0 KB
+    var selectableTotal: Int64 { items.filter(\.canSelect).reduce(0) { $0 + $1.size } }
+    var selectableCount: Int { items.filter(\.canSelect).count }
+
+    /// 勾选最大的若干项（用户显式点击才执行）
+    func selectLargest(_ count: Int) {
+        guard !busy else { return }
+        let ranked = items.filter(\.canSelect).sorted { $0.size > $1.size }.prefix(count).map(\.id)
+        for index in items.indices { items[index].selected = ranked.contains(items[index].id) }
+    }
+
+    /// 「一键清理」：没有勾选时自动勾上全部可清理项，让主按钮在任何情况下都有真实动作。
+    @discardableResult
+    func prepareForCleaning() -> [CacheItem] {
+        guard !busy else { return [] }
+        if selectedItems.isEmpty { selectAllEligible() }
+        let picked = selectedItems
+        if picked.isEmpty {
+            lastMessage = items.isEmpty
+                ? "没有可清理的候选：先点「重新扫描」，或展开扫描受限详情查看原因。"
+                : "没有可勾选的缓存项：\(items.count) 项候选全部被系统占用或读取受限，详见「扫描受限详情」。"
+        }
+        return picked
+    }
+
+    /// 记录一次清理尝试，出问题时能直接对着日志查
+    private func noteAttempt(_ items: [CacheItem]) {
+        let bytes = items.reduce(Int64(0)) { $0 + $1.size }
+        OperationsLog.write("CLEAN START items=\(items.count) logicalBytes=\(bytes)")
+    }
+
     func cleanConfirmed(_ snapshot: [CacheItem]) {
-        guard !busy, !snapshot.isEmpty else { return }
+        guard !busy else {
+            lastMessage = "正在\(scanning ? "扫描" : "清理")，请等当前任务结束后再试。"
+            OperationsLog.write("CLEAN IGNORED busy scanning=\(scanning) cleaning=\(cleaning)")
+            return
+        }
+        guard !snapshot.isEmpty else {
+            lastMessage = "没有勾选任何项目。"
+            OperationsLog.write("CLEAN IGNORED empty-selection")
+            return
+        }
         guard snapshot.allSatisfy({ candidate in
             items.contains { $0.id == candidate.id && $0.selected && $0.canSelect && $0.snapshot == candidate.snapshot }
         }) else {
-            lastMessage = "选择或扫描结果已变化，请重新确认。"
+            lastMessage = "确认期间扫描结果发生了变化，已重新扫描；请确认后再次清理。"
+            OperationsLog.write("CLEAN REJECT stale-snapshot n=\(snapshot.count)")
+            scan()
             return
         }
+        noteAttempt(snapshot)
         cleaning = true
         progress = nil
         let id = UUID()
@@ -206,7 +269,10 @@ final class CleanEngine: ObservableObject {
             }.value
             runningMonitor.cancel()
             processMonitor?.cancel()
-            guard let self, self.cleanID == id else { return }
+            guard let self, self.cleanID == id else {
+                OperationsLog.write("CLEAN ABORTED superseded")
+                return
+            }
             self.processMonitorTask = nil
             self.cleaning = false
             self.cleanTask = nil
@@ -215,9 +281,19 @@ final class CleanEngine: ObservableObject {
             let removed = Set(report.outcomes.filter { $0.status == .removed }.map(\.path))
             self.items.removeAll { removed.contains($0.path) }
             OperationsLog.write("CLEAN RESULT removed=\(report.successfulCount) incomplete=\(report.outcomes.count - report.successfulCount) logicalBytes=\(report.removedBytes) cancelled=\(report.cancelled)")
+            for outcome in report.outcomes where outcome.status != .removed {
+                OperationsLog.write("CLEAN SKIP[\(outcome.status.rawValue)] \(outcome.path) :: \(outcome.message)")
+            }
             OperationHistory.record(kind: .clean, summary: "缓存清理：成功 \(report.successfulCount) 项，未完成 \(report.outcomes.count - report.successfulCount) 项", bytes: report.removedBytes, count: report.successfulCount)
-            // Refresh candidates without replacing the completed operation report.
-            self.scan()
+            // 报告卡在前，重新扫描在后：先给出这次动手的结论，再刷新候选。
+            let incomplete = report.outcomes.count - report.successfulCount
+            if report.successfulCount == 0 {
+                let reason = report.outcomes.first?.message ?? "没有可执行的项目"
+                self.lastMessage = "这次没有清理成功：\(reason)"
+            } else {
+                self.lastMessage = "已清理 \(report.successfulCount) 项，逻辑大小 \(report.removedBytes.bytesText)\(incomplete > 0 ? "；\(incomplete) 项保留（见下方逐项结果）" : "")。"
+            }
+            self.scan(keepMessage: true)
         }
     }
 
@@ -300,6 +376,14 @@ struct CleanView: View {
         } message: { Text(confirmationText) }
     }
 
+    /// 按钮上看得到「点下去会发生什么」，避免点了没反应的错觉
+    private var cleanButtonTitle: String {
+        let picked = engine.selectedItems
+        guard !picked.isEmpty else { return "全选并清理" }
+        let bytes = picked.reduce(Int64(0)) { $0 + $1.size }
+        return "清理 \(picked.count) 项 · \(bytes.bytesText)"
+    }
+
     private var confirmationText: String {
         let size = confirmationItems.reduce(Int64(0)) { $0 + $1.size }
         let names = confirmationItems.prefix(5).map { shortPath($0.path) }.joined(separator: "\n")
@@ -322,17 +406,24 @@ struct CleanView: View {
                             .font(Typo.f(Typo.display, .semibold).monospacedDigit()).foregroundStyle(Theme.accent)
                         Text("\(engine.selectedItems.count) 项已选 · 占用估算 \(engine.selectedAllocated.bytesText)")
                             .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
+                        Text("全部可选：\(engine.selectableCount) 项 · \(engine.selectableTotal.bytesText)")
+                            .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
                     }
                     Spacer()
                     SweepButton(.secondary, title: "重新扫描", systemImage: "arrow.clockwise") { engine.scan() }
                         .disabled(engine.busy)
-                    SweepButton(.primary, title: "清理所选", systemImage: "wind.snow") {
-                        confirmationItems = engine.selectedItems
+                    SweepButton(.primary, title: cleanButtonTitle, systemImage: "wind.snow") {
+                        // 空选时自动勾上全部可清理项：主按钮永远有真实动作，不再出现“点了没反应”。
+                        let picked = engine.prepareForCleaning()
+                        guard !picked.isEmpty else { return }
+                        confirmationItems = picked
                         confirmClean = true
                     }
-                    .disabled(engine.selectedItems.isEmpty || engine.busy)
+                    .disabled(engine.busy)
                 }
-                Text("跨候选共享硬链接可能重复计入合计；APFS 克隆与快照也会影响实际释放空间。")
+                Text(engine.selectedItems.isEmpty
+                     ? "当前没有勾选项目：点主按钮会自动勾上全部可清理项，也可在下方逐项勾选。"
+                     : "跨候选共享硬链接可能重复计入合计；APFS 克隆与快照也会影响实际释放空间。")
                     .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
             }
         }
@@ -353,10 +444,13 @@ struct CleanView: View {
                     .background(RoundedRectangle(cornerRadius: Radius.md).fill(Theme.surfaceRaised))
                     .frame(maxWidth: 340)
                     Spacer()
-                    SweepButton(.quiet, title: "选择推荐项") { engine.selectRecommended() }.disabled(engine.busy)
+                    SweepButton(.quiet, title: "全选可清理") { engine.selectAllEligible() }.disabled(engine.busy)
+                    SweepButton(.quiet, title: "选最大 10 项") { engine.selectLargest(10) }.disabled(engine.busy)
                     SweepButton(.quiet, title: "全不选") { engine.deselectAll() }.disabled(engine.busy)
                 }
-                Text(search.isEmpty ? "默认不勾选；正在运行的应用缓存或扫描不完整的项目会保留。" : "清理使用全部已勾选项，包含筛选结果之外的选择。")
+                Text(search.isEmpty
+                     ? "扫描完成后默认勾选全部可清理项；正在运行的应用缓存或扫描不完整的项目会保留。"
+                     : "清理使用全部已勾选项，包含筛选结果之外的选择。")
                     .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
             }
         }
