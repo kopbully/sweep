@@ -1,0 +1,42 @@
+{
+  "verified_at": "2026-10-26T02:30:59.840473+08:00",
+  "apps": [
+    {
+      "path": "/Users/focus/Documents/ChatGPT/逆向/Sweep/Sweep.app",
+      "version": "0.2.1",
+      "signature": "verified",
+      "files": {
+        "Contents/MacOS/Sweep": "ac2e2be75c4cd6c7f31ba47831db346d53adc0ab2372bfe7cd69c3c6a8ce4027",
+        "Contents/Resources/BlackHole/black-hole.js": "72bb75bf00750cd2360318276ec367f444306e2ebff16d6544582dc05f4058cd",
+        "Contents/Resources/BlackHole/LICENSE-kakabin.txt": "d8f2695e7abd3653b185cd327855311f817042a88f92b472135f5f8e88aa5114",
+        "Contents/Resources/BlackHole/LICENSE-three.txt": "4c40a1ef62450b857c3b2aaf294936304cd552d965fbcd9d32d4c5bcf4ba4454"
+      }
+    },
+    {
+      "path": "/Applications/Sweep.app",
+      "version": "0.2.1",
+      "signature": "verified",
+      "files": {
+        "Contents/MacOS/Sweep": "ac2e2be75c4cd6c7f31ba47831db346d53adc0ab2372bfe7cd69c3c6a8ce4027",
+        "Contents/Resources/BlackHole/black-hole.js": "72bb75bf00750cd2360318276ec367f444306e2ebff16d6544582dc05f4058cd",
+        "Contents/Resources/BlackHole/LICENSE-kakabin.txt": "d8f2695e7abd3653b185cd327855311f817042a88f92b472135f5f8e88aa5114",
+        "Contents/Resources/BlackHole/LICENSE-three.txt": "4c40a1ef62450b857c3b2aaf294936304cd552d965fbcd9d32d4c5bcf4ba4454"
+      }
+    },
+    {
+      "path": "/Users/focus/Sweep/Sweep.app",
+      "version": "0.2.1",
+      "signature": "verified",
+      "files": {
+        "Contents/MacOS/Sweep": "ac2e2be75c4cd6c7f31ba47831db346d53adc0ab2372bfe7cd69c3c6a8ce4027",
+        "Contents/Resources/BlackHole/black-hole.js": "72bb75bf00750cd2360318276ec367f444306e2ebff16d6544582dc05f4058cd",
+        "Contents/Resources/BlackHole/LICENSE-kakabin.txt": "d8f2695e7abd3653b185cd327855311f817042a88f92b472135f5f8e88aa5114",
+        "Contents/Resources/BlackHole/LICENSE-three.txt": "4c40a1ef62450b857c3b2aaf294936304cd552d965fbcd9d32d4c5bcf4ba4454"
+      }
+    }
+  ],
+  "source_sync": "verified",
+  "finder_drop_status": "verified: user observed absorption; source absent; owned test file read intact in system Trash; completion logged",
+  "finder_verified_at": "2026-10-26T02:48:29.473387+08:00",
+  "finder_evidence": "black-hole-finder-acceptance.json"
+}

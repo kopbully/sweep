@@ -1,0 +1,8 @@
+FAIL ordinary file counts its own bytes
+FAIL sizeIfPresent includes ordinary files
+FAIL nested application packages are included
+PASS hard links count once within one tree
+PASS root symlink is not followed
+PASS nested symlink is not followed
+PASS missing path returns zero
+4/7 checks passed

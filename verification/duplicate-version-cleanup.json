@@ -1,0 +1,39 @@
+{
+  "generatedAt": "2026-10-26T13:16:18+08:00",
+  "goal": "删除重复的项目版本副本，只保留当前开发目录与一个最近回滚点",
+  "kept": {
+    "project": "/Users/focus/Documents/ChatGPT/逆向/Sweep",
+    "installedApp": "/Applications/Sweep.app (0.3.1)",
+    "rollbackApp": "verification/before-instance-guard-0.3.0/Sweep.app (0.3.0)",
+    "buildOutput": "Sweep.app (0.3.1, make_app.sh 产物)",
+    "earliestSourceRecord": "verification/original-sources/Sweep (0.1.0, 仅此一份，保留)"
+  },
+  "removed": {
+    "staleProjectCopy": {
+      "path": "/Users/focus/Sweep",
+      "reason": "0.2.1 时期副本，除 .build 外没有任何文件不在当前开发目录中；源码缺 Cleanup.swift / Instance.swift",
+      "buildCacheDeletedBytes": 477102080,
+      "sourcesMoved": "~/.Trash/Sweep-stale-copy-0.2.1"
+    },
+    "oldVersionSnapshots": {
+      "reason": "verification 下的整份源码/安装包快照，已被 0.3.1 取代；保留 0.3.0 回滚点",
+      "movedTo": "~/.Trash/Sweep-old-version-snapshots/",
+      "items": [
+        { "name": "backup-before-update", "version": "0.1.0" },
+        { "name": "before-black-hole", "version": "0.1.1" },
+        { "name": "first-ui-verified-build", "version": "0.1.1" },
+        { "name": "black-hole-0.2.0", "version": "0.2.0" },
+        { "name": "black-hole-installed-backup", "version": "0.1.1" },
+        { "name": "before-cleanup-0.2.1", "version": "0.2.1" }
+      ],
+      "approxBytes": 9200000
+    }
+  },
+  "verificationDirSizeBefore": "16M",
+  "verificationDirSizeAfter": "7.0M",
+  "safety": "源码与文档未做不可逆删除；旧版本快照均在废纸篓，可拖回还原。仅编译缓存 (~/Sweep/.build) 被直接删除，可用 swift build 重新生成。",
+  "stillLarge": [
+    { "path": ".build", "size": "849M", "kind": "编译缓存，可清理后重编" },
+    { "path": "BlackHoleWeb/node_modules", "size": "144M", "kind": "前端依赖，npm ci 可重建" }
+  ]
+}

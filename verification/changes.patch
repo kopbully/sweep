@@ -1,0 +1,981 @@
+--- original/Analyze.swift
++++ Sources/Sweep/Analyze.swift
+@@ -27,6 +27,7 @@
+             breadcrumb.append(root)
+         }
+         entries = []
++        totalScannedSize = 0
+         DispatchQueue.global(qos: .userInitiated).async {
+             let fm = FileManager.default
+             var result: [DiskEntry] = []
+@@ -71,10 +72,11 @@
+     }
+ 
+     func goUp() {
++        guard !scanning else { return }
+         let parent = (path as NSString).deletingLastPathComponent
+         if parent == path || parent.isEmpty { return }
+         path = parent
+-        breadcrumb.removeLast()
++        if !breadcrumb.isEmpty { breadcrumb.removeLast() }
+         scan()
+     }
+ 
+@@ -83,7 +85,7 @@
+     }
+ 
+     func go(to target: String) {
+-        if target == path { return }
++        if scanning || target == path { return }
+         breadcrumb = [target]
+         path = target
+         scan()
+@@ -93,7 +95,7 @@
+ // MARK: - 视图
+ 
+ struct AnalyzeView: View {
+-    @StateObject private var engine = AnalyzeEngine()
++    @ObservedObject var engine: AnalyzeEngine
+     @State private var confirmTrash: DiskEntry? = nil
+ 
+     var body: some View {
+@@ -149,6 +151,7 @@
+                 }
+                 .buttonStyle(.bordered)
+                 .tint(Theme.textSecondary)
++                .disabled(engine.scanning)
+ 
+                 Button {
+                     engine.goUp()
+@@ -158,7 +161,7 @@
+                 }
+                 .buttonStyle(.bordered)
+                 .tint(Theme.textSecondary)
+-                .disabled(isAtRoot)
++                .disabled(isAtRoot || engine.scanning)
+ 
+                 Text(shortPath(engine.path))
+                     .font(.system(size: 12).monospaced())
+@@ -182,7 +185,7 @@
+                         .font(.system(size: 11, weight: .medium))
+                 }
+                 .buttonStyle(.bordered)
+-                .disabled(isAtRoot)
++                .disabled(engine.scanning)
+             }
+         }
+     }
+--- original/Clean.swift
++++ Sources/Sweep/Clean.swift
+@@ -61,6 +61,33 @@
+             id: "trash", title: "废纸篓", subtitle: "清空后释放的空间才真正落袋",
+             paths: ["~/.Trash/*"], icon: "trash", safe: true),
+     ]
++
++    static func scanTargets(categories: [CleanCategory] = CleanCatalog.categories) -> [(path: String, category: String)] {
++        // 专属类别优先，避免通用缓存分类重复统计同一个目录。
++        let ordered = categories.filter { $0.id != "appCaches" } + categories.filter { $0.id == "appCaches" }
++        var seen = Set<String>()
++        var targets: [(path: String, category: String)] = []
++        for category in ordered {
++            for pattern in category.paths {
++                let expanded = pattern.expandingTilde
++                let paths: [String]
++                if expanded.hasSuffix("*") {
++                    let dir = URL(fileURLWithPath: String(expanded.dropLast()), isDirectory: true)
++                    let children = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
++                    paths = children.sorted().map { dir.appendingPathComponent($0).path }
++                } else {
++                    paths = [expanded]
++                }
++                for path in paths {
++                    let normalized = (path as NSString).standardizingPath
++                    if seen.insert(normalized).inserted {
++                        targets.append((normalized, category.title))
++                    }
++                }
++            }
++        }
++        return targets
++    }
+ }
+ 
+ // MARK: - 扫描引擎
+@@ -75,35 +102,25 @@
+     var selectedTotal: Int64 { items.filter(\.selected).reduce(0) { $0 + $1.size } }
+ 
+     func scan() {
+-        guard !scanning else { return }
++        guard !scanning, !cleaning else { return }
+         scanning = true
+         lastFreed = nil
+-        let cats = CleanCatalog.categories
+         DispatchQueue.global(qos: .userInitiated).async {
+             var result: [CacheItem] = []
+             let lock = NSLock()
+-            for cat in cats {
+-                let paths: [String] = cat.paths.flatMap { p in
+-                    let expanded = p.expandingTilde
+-                    if expanded.hasSuffix("*") {
+-                        let dir = String(expanded.dropLast())
+-                        let fm = FileManager.default
+-                        let kids = (try? fm.contentsOfDirectory(atPath: dir)) ?? []
+-                        return kids.filter { !$0.hasPrefix(".") }.sorted()
+-                            .map { "\(dir)/\($0)" }
+-                    }
+-                    return [expanded]
+-                }
+-                DispatchQueue.concurrentPerform(iterations: paths.count) { i in
+-                    let path = paths[i]
+-                    guard FileManager.default.fileExists(atPath: path) else { return }
++            let targets = CleanCatalog.scanTargets()
++            let workers = min(4, targets.count)
++            DispatchQueue.concurrentPerform(iterations: workers) { worker in
++                for i in stride(from: worker, to: targets.count, by: workers) {
++                    let (path, category) = targets[i]
+                     let size = Sizer.size(path)
++                    guard size > 0 else { continue }
+                     lock.lock()
+                     result.append(CacheItem(
+                         id: path,
+                         name: (path as NSString).lastPathComponent,
+                         path: path,
+-                        category: cat.title,
++                        category: category,
+                         size: size))
+                     lock.unlock()
+                 }
+@@ -140,7 +157,7 @@
+ // MARK: - 视图
+ 
+ struct CleanView: View {
+-    @StateObject private var engine = CleanEngine()
++    @ObservedObject var engine: CleanEngine
+     @State private var confirmClean = false
+ 
+     var grouped: [(String, [CacheItem])] {
+--- original/Common.swift
++++ Sources/Sweep/Common.swift
+@@ -139,41 +139,39 @@
+ // MARK: - 目录/文件大小统计
+ 
+ enum Sizer {
++    private struct FileIdentity: Hashable {
++        let device: dev_t
++        let inode: ino_t
++    }
++
+     /// 递归计算大小；不跟随符号链接；聚合硬链接不重复计入同一顶层树内
+     static func size(_ path: String) -> Int64 {
+         let root = (path as NSString).standardizingPath
++        var rootStat = stat()
++        guard lstat(root, &rootStat) == 0 else { return 0 }
++        let kind = rootStat.st_mode & S_IFMT
++        if kind == S_IFREG { return Int64(rootStat.st_size) }
++        guard kind == S_IFDIR else { return 0 }
+         guard let en = FileManager.default.enumerator(at: URL(fileURLWithPath: root),
+-                                                      includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
+-                                                      options: [.skipsPackageDescendants]) else { return 0 }
++                                                      includingPropertiesForKeys: [],
++                                                      options: []) else { return 0 }
+         var total: Int64 = 0
+-        var seenInodes = Set<UInt64>()
++        var seenInodes = Set<FileIdentity>()
+         for case let url as URL in en {
+-            guard let values = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey]) else { continue }
+-            guard values.isRegularFile == true else { continue }
+-            var fileSize = Int64(values.fileSize ?? 0)
+-            // 硬链接去重：同一 inode 在本树内只计一次
+-            if let inode = url.inodeIdentifier {
+-                if !seenInodes.insert(inode).inserted { fileSize = 0 }
++            var st = stat()
++            guard lstat(url.path, &st) == 0, st.st_mode & S_IFMT == S_IFREG else { continue }
++            if st.st_nlink > 1 {
++                let identity = FileIdentity(device: st.st_dev, inode: st.st_ino)
++                if !seenInodes.insert(identity).inserted { continue }
+             }
+-            total += fileSize
++            total += Int64(st.st_size)
+         }
+         return total
+     }
+ 
+     /// 目录的递归大小（若路径不存在返回 0）
+     static func sizeIfPresent(_ path: String) -> Int64 {
+-        var st = stat()
+-        let p = (path as NSString).standardizingPath
+-        guard lstat(p, &st) == 0 else { return 0 }
+-        return Sizer.size(p)
+-    }
+-}
+-
+-extension URL {
+-    var inodeIdentifier: UInt64? {
+-        var st = stat()
+-        guard lstat(path, &st) == 0, st.st_nlink > 1 else { return nil }
+-        return UInt64(st.st_ino)
++        size(path)
+     }
+ }
+ 
+--- original/Status.swift
++++ Sources/Sweep/Status.swift
+@@ -2,80 +2,113 @@
+ import Darwin
+ import IOKit.ps
+ 
++private func memoryText(_ bytes: Int64) -> String {
++    ByteCountFormatter.string(fromByteCount: bytes, countStyle: .memory)
++}
++
+ // MARK: - 系统采样器
+ 
+ struct SystemSnapshot {
+-    var cpuUsage: Double = 0            // 0...100
++    var cpuUsage: Double? = nil         // 两次采样间的 0...100
+     var memUsedBytes: Int64 = 0
+     var memTotalBytes: Int64 = 0
+-    var netInBps: Int64 = 0
+-    var netOutBps: Int64 = 0
++    var netInBps: Int64? = nil
++    var netOutBps: Int64? = nil
+     var diskTotalBytes: Int64 = 0
+     var diskFreeBytes: Int64 = 0
+     var batteryPercent: Double? = nil
+     var onAC: Bool = true
+     var load1: Double = 0
+     var uptimeText: String = "—"
+-    var timestamp: Date = Date()
+-}
+-
++    var timestamp: Date? = nil
++}
++
++struct SystemReading {
++    var snapshot = SystemSnapshot()
++    var cpuHistory: [Double] = []
++    var memHistory: [Double] = []
++    var netInHistory: [Double] = []
++    var netOutHistory: [Double] = []
++}
++
++@MainActor
+ final class SystemSampler: ObservableObject {
+-    @Published var snapshot = SystemSnapshot()
+-    @Published var cpuHistory: [Double] = Array(repeating: 0, count: 60)
+-    @Published var memHistory: [Double] = Array(repeating: 0, count: 60)
+-    @Published var netInHistory: [Double] = Array(repeating: 0, count: 60)
+-    @Published var netOutHistory: [Double] = Array(repeating: 0, count: 60)
+-
+-    private var timer: Timer?
+-    private var lastNet: (rx: Int64, tx: Int64, t: Date)? = nil
++    @Published private(set) var reading = SystemReading()
++    var snapshot: SystemSnapshot { reading.snapshot }
++    var cpuHistory: [Double] { reading.cpuHistory }
++    var memHistory: [Double] { reading.memHistory }
++    var netInHistory: [Double] { reading.netInHistory }
++    var netOutHistory: [Double] { reading.netOutHistory }
++    private var samplingTask: Task<Void, Never>?
+ 
+     func start() {
+-        guard timer == nil else { return }
+-        tick()
+-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+-            self?.tick()
++        guard samplingTask == nil else { return }
++        reading = SystemReading()
++        samplingTask = Task { [weak self] in
++            let reader = SystemReader()
++            while !Task.isCancelled {
++                let snapshot = await reader.sampleOnce()
++                guard !Task.isCancelled, self != nil else { return }
++                self?.publish(snapshot)
++                try? await Task.sleep(nanoseconds: 1_000_000_000)
++            }
+         }
+     }
+ 
+     func stop() {
+-        timer?.invalidate()
+-        timer = nil
+-    }
+-
+-    func tick() {
+-        let snap = sampleOnce()
+-        DispatchQueue.main.async {
+-            self.snapshot = snap
+-            let cpuSpec = snap.cpuUsage / 100
+-            let memSpec = snap.memTotalBytes > 0 ? Double(snap.memUsedBytes) / Double(snap.memTotalBytes) : 0
+-            let inSpec = min(Double(snap.netInBps) / 2_000_000, 1)      // 2MB/s 满量程
+-            let outSpec = min(Double(snap.netOutBps) / 2_000_000, 1)
+-            self.cpuHistory = self.push(self.cpuHistory, cpuSpec)
+-            self.memHistory = self.push(self.memHistory, memSpec)
+-            self.netInHistory = self.push(self.netInHistory, inSpec)
+-            self.netOutHistory = self.push(self.netOutHistory, outSpec)
+-        }
++        samplingTask?.cancel()
++        samplingTask = nil
++    }
++
++    deinit { samplingTask?.cancel() }
++
++    private func publish(_ snapshot: SystemSnapshot) {
++        var next = reading
++        next.snapshot = snapshot
++        if let cpu = snapshot.cpuUsage { next.cpuHistory = push(next.cpuHistory, cpu / 100) }
++        if snapshot.memTotalBytes > 0 {
++            next.memHistory = push(next.memHistory, Double(snapshot.memUsedBytes) / Double(snapshot.memTotalBytes))
++        }
++        if let rate = snapshot.netInBps { next.netInHistory = push(next.netInHistory, Double(rate)) }
++        if let rate = snapshot.netOutBps { next.netOutHistory = push(next.netOutHistory, Double(rate)) }
++        reading = next
+     }
+ 
+     private func push(_ arr: [Double], _ v: Double) -> [Double] {
+-        Array(arr.dropFirst()) + [v]
+-    }
++        Array((arr + [v]).suffix(60))
++    }
++}
++
++struct InterfaceCounters {
++    let received: UInt32
++    let sent: UInt32
++    let changedAt: Int64
++}
++
++struct NetworkSample {
++    let interfaces: [String: InterfaceCounters]
++    let uptime: Double
++}
++
++private actor SystemReader {
++    private var lastCPU: [UInt32]?
++    private var lastNet: NetworkSample?
+ 
+     func sampleOnce() -> SystemSnapshot {
+         var s = SystemSnapshot()
+-        s.cpuUsage = Sizing.cpuLoad()
++        let ticks = Sizing.cpuTicks()
++        s.cpuUsage = Sizing.cpuUsage(previous: lastCPU, current: ticks)
++        lastCPU = ticks
+ 
+         let (memUsed, memTotal) = Sizing.memory()
+         s.memUsedBytes = memUsed
+         s.memTotalBytes = memTotal
+ 
+-        let (rx, tx) = Sizing.netBytes()
+-        let now = Date()
+-        if let last = lastNet, now.timeIntervalSince(last.t) > 0.5 {
+-            s.netInBps = Int64(Double(rx - last.rx) / now.timeIntervalSince(last.t))
+-            s.netOutBps = Int64(Double(tx - last.tx) / now.timeIntervalSince(last.t))
+-        }
+-        lastNet = (rx, tx, now)
++        let network = Sizing.netBytes()
++        let rates = Sizing.networkRates(previous: lastNet, current: network)
++        s.netInBps = rates.received
++        s.netOutBps = rates.sent
++        lastNet = network
+ 
+         let (total, free) = Sizing.disk()
+         s.diskTotalBytes = total
+@@ -87,6 +120,7 @@
+ 
+         s.load1 = Sizing.loadAverage()
+         s.uptimeText = Sizing.uptimeText()
++        s.timestamp = Date()
+         return s
+     }
+ }
+@@ -94,30 +128,32 @@
+ // 系统指标读取
+ enum Sizing {
+     // CPU: host_processor_info
+-    static func cpuLoad() -> Double {
++    static func cpuTicks() -> [UInt32]? {
+         var numCPUs: natural_t = 0
+         var info: processor_info_array_t? = nil
+         var count: mach_msg_type_number_t = 0
+         let kr = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &numCPUs, &info, &count)
+-        guard kr == KERN_SUCCESS, let info = info, count > 0 else { return 0 }
++        guard kr == KERN_SUCCESS, let info = info, count > 0 else { return nil }
+         defer {
+             vm_deallocate(mach_task_self_, vm_address_t(bitPattern: info),
+                           vm_size_t(Int(count) * MemoryLayout<integer_t>.stride))
+         }
+         let buf = UnsafeBufferPointer(start: info, count: Int(count))
+-        let perCPU = Int(2 + CPU_STATE_MAX)
+-        guard buf.count >= Int(numCPUs) * perCPU else { return 0 }
+-        var user: Int64 = 0, sys: Int64 = 0, nice: Int64 = 0, idle: Int64 = 0
+-        for c in 0..<Int(numCPUs) {
+-            let base = c * perCPU
+-            user += Int64(buf[base + 0])
+-            sys += Int64(buf[base + 1])
+-            idle += Int64(buf[base + 2])
+-            nice += Int64(buf[base + 3])
+-        }
+-        let busy = user + sys + nice
+-        let total = busy + idle
+-        guard total > 0 else { return 0 }
++        guard buf.count == Int(numCPUs) * Int(CPU_STATE_MAX) else { return nil }
++        return buf.map { UInt32(bitPattern: $0) }
++    }
++
++    static func cpuUsage(previous: [UInt32]?, current: [UInt32]?) -> Double? {
++        guard let previous, let current, !current.isEmpty,
++              current.count == previous.count, current.count % Int(CPU_STATE_MAX) == 0 else { return nil }
++        var busy: UInt64 = 0
++        var total: UInt64 = 0
++        for i in current.indices {
++            let delta = UInt64(current[i] &- previous[i])
++            total += delta
++            if i % Int(CPU_STATE_MAX) != Int(CPU_STATE_IDLE) { busy += delta }
++        }
++        guard total > 0 else { return nil }
+         return Double(busy) / Double(total) * 100
+     }
+ 
+@@ -132,11 +168,9 @@
+             }
+         }
+         guard kr == KERN_SUCCESS, totalMem > 0 else { return (0, Int64(totalMem)) }
+-        let free = Int64(stats.free_count) * pageSize()
+-        let inactive = Int64(stats.inactive_count) * pageSize()
+-        let purgeable = Int64(stats.purgeable_count) * pageSize()
+-        let used = Int64(totalMem) - free - inactive - purgeable
+-        return (max(used, 0), Int64(totalMem))
++        let usedPages = Int64(stats.internal_page_count) - Int64(stats.purgeable_count)
++            + Int64(stats.wire_count) + Int64(stats.compressor_page_count)
++        return (min(max(usedPages * pageSize(), 0), Int64(totalMem)), Int64(totalMem))
+     }
+ 
+     static func totalPhysicalMemory() -> UInt64 {
+@@ -151,29 +185,49 @@
+     }
+ 
+     // 网络: getifaddrs
+-    static func netBytes() -> (rx: Int64, tx: Int64) {
+-        var rx: Int64 = 0, tx: Int64 = 0
++    static func netBytes() -> NetworkSample {
++        var counters: [String: InterfaceCounters] = [:]
+         var ifaddr: UnsafeMutablePointer<ifaddrs>?
+-        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return (0, 0) }
++        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else {
++            return NetworkSample(interfaces: [:], uptime: ProcessInfo.processInfo.systemUptime)
++        }
+         defer { freeifaddrs(ifaddr) }
+         var p: UnsafeMutablePointer<ifaddrs>? = first
+         while let cur = p {
+             p = cur.pointee.ifa_next
+-            if let data = cur.pointee.ifa_data, cur.pointee.ifa_addr?.pointee.sa_family == UInt8(AF_LINK) {
+-                let d = data.assumingMemoryBound(to: if_data64.self).pointee
+-                rx += Int64(d.ifi_ibytes)
+-                tx += Int64(d.ifi_obytes)
+-            }
+-        }
+-        return (rx, tx)
++            let name = String(cString: cur.pointee.ifa_name)
++            // 物理 Wi-Fi / 以太网合计；避免把 VPN、回环和桥接流量重复累计。
++            guard name.hasPrefix("en"), cur.pointee.ifa_flags & UInt32(IFF_UP) != 0,
++                  cur.pointee.ifa_flags & UInt32(IFF_LOOPBACK) == 0,
++                  cur.pointee.ifa_addr?.pointee.sa_family == UInt8(AF_LINK),
++                  let data = cur.pointee.ifa_data else { continue }
++            let d = data.assumingMemoryBound(to: if_data.self).pointee
++            let changedAt = Int64(d.ifi_lastchange.tv_sec) * 1_000_000 + Int64(d.ifi_lastchange.tv_usec)
++            counters[name] = InterfaceCounters(received: d.ifi_ibytes, sent: d.ifi_obytes, changedAt: changedAt)
++        }
++        return NetworkSample(interfaces: counters, uptime: ProcessInfo.processInfo.systemUptime)
++    }
++
++    static func networkRates(previous: NetworkSample?, current: NetworkSample) -> (received: Int64?, sent: Int64?) {
++        guard let previous, current.uptime > previous.uptime else { return (nil, nil) }
++        var received: UInt64 = 0
++        var sent: UInt64 = 0
++        for (name, counter) in current.interfaces {
++            guard let old = previous.interfaces[name], old.changedAt == counter.changedAt else { continue }
++            received += UInt64(counter.received &- old.received)
++            sent += UInt64(counter.sent &- old.sent)
++        }
++        let elapsed = current.uptime - previous.uptime
++        return (Int64(Double(received) / elapsed), Int64(Double(sent) / elapsed))
+     }
+ 
+     static func disk() -> (total: Int64, free: Int64) {
+         let url = URL(fileURLWithPath: "/")
+-        guard let v = try? url.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey]) else {
++        guard let v = try? url.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityKey]) else {
+             return (0, 0)
+         }
+-        return (Int64(v.volumeTotalCapacity ?? 0), Int64(v.volumeAvailableCapacityForImportantUsage ?? 0))
++        let total = Int64(v.volumeTotalCapacity ?? 0)
++        return (total, min(max(Int64(v.volumeAvailableCapacity ?? 0), 0), total))
+     }
+ 
+     static func battery() -> (percent: Double?, onAC: Bool) {
+@@ -216,40 +270,46 @@
+     let id: Int32
+     let name: String
+     let cpu: Double
+-    let memMB: Double
++    let memoryBytes: Int64
+ }
+ 
+ enum ProcList {
+-    static func fetch() -> [ProcInfo] {
++    static func fetch() throws -> [ProcInfo] {
+         let task = Process()
+-        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+-        task.arguments = ["-c", "ps -axo pid=,pcpu=,pmem=,comm= | grep -v 'ps -axo'"]
++        task.executableURL = URL(fileURLWithPath: "/bin/ps")
++        task.arguments = ["-axo", "pid=,pcpu=,rss=,comm="]
++        var environment = ProcessInfo.processInfo.environment
++        environment["LC_ALL"] = "C"
++        task.environment = environment
+         let pipe = Pipe()
+         task.standardOutput = pipe
+         task.standardError = FileHandle.nullDevice
+-        do { try task.run() } catch { return [] }
++        try task.run()
+         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+         task.waitUntilExit()
+-        guard let text = String(data: data, encoding: .utf8) else { return [] }
++        guard task.terminationStatus == 0, let text = String(data: data, encoding: .utf8) else {
++            throw NSError(domain: "Sweep.Processes", code: Int(task.terminationStatus),
++                          userInfo: [NSLocalizedDescriptionKey: "进程列表暂时不可用"])
++        }
++        return parse(text, excludingPID: task.processIdentifier)
++    }
++
++    static func parse(_ text: String, excludingPID: Int32? = nil) -> [ProcInfo] {
+         var list: [ProcInfo] = []
+         for line in text.components(separatedBy: "\n") where !line.isEmpty {
+-            let parts = line.split(separator: " ", omittingEmptySubsequences: true)
++            let parts = line.split(whereSeparator: \.isWhitespace)
+             guard parts.count >= 4,
+                   let pid = Int32(parts[0]),
+                   let cpu = Double(parts[1]),
+-                  let pmem = Double(parts[2]) else { continue }
++                  let rss = Int64(parts[2]), rss >= 0 else { continue }
+             let name = parts[3...].joined(separator: " ")
+-            if pid == ProcessInfo.processInfo.processIdentifier { continue }
++            if pid == excludingPID { continue }
+             list.append(ProcInfo(id: pid,
+                                  name: (name as NSString).lastPathComponent,
+                                  cpu: cpu,
+-                                 memMB: pmem * 10))   // %mem * 物理 GB => MB 近似，展示用
+-        }
+-        // 用真实物理内存换算 MB
+-        let totalMem = Sizing.totalPhysicalMemory()
+-        let gb = Double(totalMem) / 1e9
+-        return list.map { ProcInfo(id: $0.id, name: $0.name, cpu: $0.cpu, memMB: $0.memMB / 10 * gb) }
+-            .sorted { $0.cpu > $1.cpu }
++                                 memoryBytes: rss * 1024))
++        }
++        return list
+     }
+ }
+ 
+@@ -257,17 +317,7 @@
+ 
+ struct StatusView: View {
+     @StateObject private var sampler = SystemSampler()
+-    @State private var procs: [ProcInfo] = []
+-    @State private var sortKey: SortKey = .cpu
+-    @State private var pinned: Set<String> = []
+-    @State private var loopActive = false
+-    @State private var pollInFlight = false
+-
+-    enum SortKey: String, CaseIterable {
+-        case cpu = "CPU"
+-        case mem = "内存"
+-        case name = "名称"
+-    }
++    @Environment(\.scenePhase) private var scenePhase
+ 
+     var body: some View {
+         ScrollView {
+@@ -278,15 +328,15 @@
+ 
+                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                           spacing: 12) {
+-                    metricCard(title: "CPU", value: String(format: "%.0f%%", sampler.snapshot.cpuUsage),
+-                               ratio: sampler.snapshot.cpuUsage / 100,
++                    metricCard(title: "CPU", value: sampler.snapshot.cpuUsage.map { String(format: "%.0f%%", $0) } ?? "采样中",
++                               ratio: (sampler.snapshot.cpuUsage ?? 0) / 100,
+                                detail: "负载 \(String(format: "%.2f", sampler.snapshot.load1))",
+-                               color: Theme.healthColor(100 - sampler.snapshot.cpuUsage),
++                               color: Theme.usageColor(sampler.snapshot.cpuUsage ?? 0),
+                                series: sampler.cpuHistory)
+-                    metricCard(title: "内存", value: sampler.snapshot.memUsedBytes.bytesText,
++                    metricCard(title: "内存", value: sampler.snapshot.memTotalBytes > 0 ? memoryText(sampler.snapshot.memUsedBytes) : "暂无数据",
+                                ratio: Double(sampler.snapshot.memUsedBytes) / Double(max(sampler.snapshot.memTotalBytes, 1)),
+-                               detail: "共 \(sampler.snapshot.memTotalBytes.bytesText)",
+-                               color: Theme.healthColor(100 - memPct()),
++                               detail: "共 \(memoryText(sampler.snapshot.memTotalBytes))",
++                               color: Theme.usageColor(memPct()),
+                                series: sampler.memHistory)
+                     diskCard
+                     netCard(direction: .down)
+@@ -302,8 +352,12 @@
+             }
+             .padding(20)
+         }
+-        .onAppear { sampler.start(); refreshProcs() }
+-        .onDisappear { sampler.stop(); loopActive = false }
++        .onAppear { if scenePhase != .background { sampler.start() } }
++        .onDisappear { sampler.stop() }
++        .task(id: scenePhase) {
++            guard !Task.isCancelled else { return }
++            if scenePhase == .background { sampler.stop() } else { sampler.start() }
++        }
+         .background(Theme.bg)
+     }
+ 
+@@ -313,7 +367,7 @@
+                 GaugeRing(value: healthScore() / 100, color: Theme.healthColor(healthScore()))
+                     .frame(width: 52, height: 52)
+                     .overlay(
+-                        Text("\(Int(healthScore()))")
++                        Text(sampler.snapshot.timestamp == nil ? "—" : "\(Int(healthScore()))")
+                             .font(.system(size: 15, weight: .bold, design: .rounded))
+                             .foregroundStyle(Theme.textPrimary)
+                     )
+@@ -331,69 +385,7 @@
+         }
+     }
+ 
+-    private var processCard: some View {
+-        Card {
+-            VStack(alignment: .leading, spacing: 8) {
+-                HStack {
+-                    Text("进程")
+-                        .font(.system(size: 14, weight: .semibold))
+-                        .foregroundStyle(Theme.textPrimary)
+-                    Spacer()
+-                    Picker("", selection: $sortKey) {
+-                        ForEach(SortKey.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+-                    }
+-                    .pickerStyle(.segmented)
+-                    .frame(width: 200)
+-                    Label("2 秒刷新", systemImage: "clock")
+-                        .font(.system(size: 10))
+-                        .foregroundStyle(Theme.textSecondary)
+-                }
+-                headerRow
+-                Divider().overlay(Theme.cardBorder)
+-                ForEach(sortedProcs) { p in
+-                    HStack(spacing: 10) {
+-                        Image(systemName: pinned.contains(p.name) ? "pin.fill" : "pin")
+-                            .font(.system(size: 9))
+-                            .foregroundStyle(pinned.contains(p.name) ? Theme.accentWarn : Theme.textSecondary.opacity(0.35))
+-                            .onTapGesture { togglePin(p.name) }
+-                        Text(p.name)
+-                            .font(.system(size: 12))
+-                            .foregroundStyle(Theme.textPrimary)
+-                            .lineLimit(1)
+-                        Spacer()
+-                        Text(String(format: "%.1f%%", p.cpu))
+-                            .font(.system(size: 11, weight: .medium).monospacedDigit())
+-                            .foregroundStyle(p.cpu > 20 ? Theme.accentWarn : Theme.textSecondary)
+-                            .frame(width: 60, alignment: .trailing)
+-                        Text("\(Int(p.memMB)) MB")
+-                            .font(.system(size: 11).monospacedDigit())
+-                            .foregroundStyle(Theme.textSecondary)
+-                            .frame(width: 72, alignment: .trailing)
+-                    }
+-                    .padding(.vertical, 2)
+-                    .contentShape(Rectangle())
+-                    .onTapGesture { togglePin(p.name) }
+-                }
+-            }
+-        }
+-    }
+-
+-    private var headerRow: some View {
+-        HStack(spacing: 10) {
+-            Text("进程")
+-                .font(.system(size: 10))
+-                .foregroundStyle(Theme.textSecondary)
+-            Spacer()
+-            Text("CPU %")
+-                .font(.system(size: 10))
+-                .foregroundStyle(Theme.textSecondary)
+-                .frame(width: 60, alignment: .trailing)
+-            Text("内存")
+-                .font(.system(size: 10))
+-                .foregroundStyle(Theme.textSecondary)
+-                .frame(width: 72, alignment: .trailing)
+-        }
+-    }
++    private var processCard: some View { ProcessCard() }
+ 
+     private var diskCard: some View {
+         let ratio = Double(sampler.snapshot.diskTotalBytes - sampler.snapshot.diskFreeBytes) / Double(max(sampler.snapshot.diskTotalBytes, 1))
+@@ -402,11 +394,11 @@
+                 HStack {
+                     Text("磁盘").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                     Spacer()
+-                    Text("\(Int(ratio * 100))% 已用")
++                    Text(sampler.snapshot.diskTotalBytes > 0 ? "\(Int(ratio * 100))% 已用" : "暂无数据")
+                         .font(.system(size: 11, weight: .semibold))
+-                        .foregroundStyle(Theme.healthColor(100 - ratio * 100))
+-                }
+-                GaugeRing(value: ratio, color: Theme.healthColor(100 - ratio * 100))
++                        .foregroundStyle(Theme.usageColor(ratio * 100))
++                }
++                GaugeRing(value: ratio, color: Theme.usageColor(ratio * 100))
+                     .frame(width: 44, height: 44)
+                     .frame(maxWidth: .infinity)
+                 Text("空闲 \(sampler.snapshot.diskFreeBytes.bytesText) / \(sampler.snapshot.diskTotalBytes.bytesText)")
+@@ -429,7 +421,7 @@
+                         .font(.system(size: 12))
+                         .foregroundStyle(Theme.textSecondary)
+                     Spacer()
+-                    Text("\(max(bps, 0).bytesText)/s")
++                    Text(bps.map { $0 == 0 ? "0 B/s" : "\(max($0, 0).bytesText)/s" } ?? "采样中")
+                         .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                         .foregroundStyle(Theme.textPrimary)
+                 }
+@@ -438,6 +430,7 @@
+                     .frame(height: 26)
+             }
+         }
++        .help("Wi-Fi 与以太网物理接口合计；不重复累计 VPN 隧道流量。")
+     }
+ 
+     enum NetDir { case down, up }
+@@ -523,53 +516,123 @@
+         var score = 100.0
+         if diskPct() > 90 { score -= 40 } else if diskPct() > 80 { score -= 15 }
+         if memPct() > 90 { score -= 25 } else if memPct() > 80 { score -= 10 }
+-        if sampler.snapshot.cpuUsage > 90 { score -= 15 }
++        if (sampler.snapshot.cpuUsage ?? 0) > 90 { score -= 15 }
+         return max(score, 0)
+     }
+ 
+     private func healthNote() -> String {
+-        if diskPct() > 90 { return "磁盘已满 \(Int(diskPct()))%，系统开始变卡。去「清理」回收一些空间。" }
++        if sampler.snapshot.timestamp == nil { return "正在读取系统指标…" }
++        if diskPct() > 90 { return "磁盘已用 \(Int(diskPct()))%，建议在「分析」中查看大文件。" }
+         if diskPct() > 80 { return "磁盘占用偏高（\(Int(diskPct()))%），可以从「分析」里找找大头。" }
+-        if memPct() > 90 { return "内存压力大，浏览器开着很多标签时尤其明显。" }
+-        return "一切正常，安静地跑着。"
++        if memPct() > 90 { return "内存使用率较高，可以在下方按内存排序查看进程。" }
++        return "当前使用率处于常规范围。"
++    }
++
++}
++
++private struct ProcessCard: View {
++    @Environment(\.scenePhase) private var scenePhase
++    @State private var procs: [ProcInfo] = []
++    @State private var sortKey: SortKey = .cpu
++    @State private var pinned: Set<Int32> = []
++    @State private var errorMessage: String?
++
++    private enum SortKey: String, CaseIterable {
++        case cpu = "CPU", memory = "内存", name = "名称"
++    }
++
++    var body: some View {
++        Card {
++            VStack(alignment: .leading, spacing: 8) {
++                HStack {
++                    Text("进程").font(.system(size: 14, weight: .semibold))
++                        .foregroundStyle(Theme.textPrimary)
++                    Spacer()
++                    Picker("进程排序", selection: $sortKey) {
++                        ForEach(SortKey.allCases, id: \.self) { Text($0.rawValue).tag($0) }
++                    }
++                    .pickerStyle(.segmented)
++                    .labelsHidden()
++                    .frame(width: 200)
++                    Label("\(procs.count) 项 · 2 秒刷新", systemImage: "clock")
++                        .font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
++                }
++                HStack {
++                    Text("进程 · 点击图钉置顶")
++                    Spacer()
++                    Text("CPU %").frame(width: 60, alignment: .trailing)
++                    Text("内存 RSS").frame(width: 84, alignment: .trailing)
++                }
++                .font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
++                Divider().overlay(Theme.cardBorder)
++                if let errorMessage {
++                    Text(errorMessage).font(.system(size: 11)).foregroundStyle(Theme.accentWarn)
++                }
++                ScrollView {
++                    LazyVStack(spacing: 6) {
++                        ForEach(sortedProcs) { process in
++                            HStack(spacing: 10) {
++                                Button { togglePin(process.id) } label: {
++                                    Image(systemName: pinned.contains(process.id) ? "pin.fill" : "pin")
++                                        .font(.system(size: 10))
++                                        .foregroundStyle(pinned.contains(process.id) ? Theme.accentWarn : Theme.textSecondary)
++                                        .frame(width: 20, height: 24)
++                                }
++                                .buttonStyle(.plain)
++                                .help(pinned.contains(process.id) ? "取消置顶 \(process.name)" : "置顶 \(process.name)")
++                                .accessibilityLabel("\(pinned.contains(process.id) ? "取消置顶" : "置顶") \(process.name)")
++                                Text(process.name).font(.system(size: 12))
++                                    .foregroundStyle(Theme.textPrimary).lineLimit(1)
++                                    .help("PID \(process.id) · \(process.name)")
++                                Spacer()
++                                Text(String(format: "%.1f%%", process.cpu))
++                                    .font(.system(size: 11, weight: .medium).monospacedDigit())
++                                    .foregroundStyle(process.cpu > 20 ? Theme.accentWarn : Theme.textSecondary)
++                                    .frame(width: 60, alignment: .trailing)
++                                Text(memoryText(process.memoryBytes))
++                                    .font(.system(size: 11).monospacedDigit())
++                                    .foregroundStyle(Theme.textSecondary)
++                                    .frame(width: 84, alignment: .trailing)
++                            }
++                        }
++                    }
++                }
++                .frame(height: 260)
++            }
++        }
++        .help("CPU 为 ps 提供的进程平均占用；内存为驻留大小 RSS，共享页可能被多个进程计入。")
++        .task(id: scenePhase) {
++            guard scenePhase != .background else { return }
++            while !Task.isCancelled {
++                do {
++                    let result = try await Task.detached(priority: .utility) { try ProcList.fetch() }.value
++                    guard !Task.isCancelled else { return }
++                    procs = result
++                    pinned.formIntersection(Set(result.map(\.id)))
++                    errorMessage = nil
++                } catch {
++                    guard !Task.isCancelled else { return }
++                    errorMessage = "读取进程失败：\(error.localizedDescription)"
++                }
++                try? await Task.sleep(nanoseconds: 2_000_000_000)
++            }
++        }
+     }
+ 
+     private var sortedProcs: [ProcInfo] {
+-        let pinnedFirst = procs.filter { pinned.contains($0.name) }
+-        let rest = procs.filter { !pinned.contains($0.name) }
+-        let sorted: [ProcInfo]
+-        switch sortKey {
+-        case .cpu: sorted = rest.sorted { $0.cpu > $1.cpu }
+-        case .mem: sorted = rest.sorted { $0.memMB > $1.memMB }
+-        case .name: sorted = rest.sorted { $0.name < $1.name }
+-        }
+-        return pinnedFirst + sorted
+-    }
+-
+-    private func togglePin(_ name: String) {
+-        if pinned.contains(name) { pinned.remove(name) } else { pinned.insert(name) }
+-    }
+-
+-    private func refreshProcs() {
+-        loopActive = true
+-        pollingLoop()
+-    }
+-
+-    private func pollingLoop() {
+-        guard loopActive else { return }
+-        pollInFlight = true
+-        DispatchQueue.global(qos: .utility).async {
+-            let result = ProcList.fetch()
+-            DispatchQueue.main.async {
+-                if loopActive {
+-                    procs = result
+-                }
+-                pollInFlight = false
+-            }
+-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+-                guard loopActive else { return }
+-                pollingLoop()
+-            }
+-        }
+-    }
+-}
++        procs.sorted { a, b in
++            let aPinned = pinned.contains(a.id), bPinned = pinned.contains(b.id)
++            if aPinned != bPinned { return aPinned }
++            switch sortKey {
++            case .cpu: if a.cpu != b.cpu { return a.cpu > b.cpu }
++            case .memory: if a.memoryBytes != b.memoryBytes { return a.memoryBytes > b.memoryBytes }
++            case .name: if a.name != b.name { return a.name.localizedStandardCompare(b.name) == .orderedAscending }
++            }
++            return a.id < b.id
++        }
++    }
++
++    private func togglePin(_ pid: Int32) {
++        if pinned.contains(pid) { pinned.remove(pid) } else { pinned.insert(pid) }
++    }
++}
+--- original/SweepApp.swift
++++ Sources/Sweep/SweepApp.swift
+@@ -60,6 +60,9 @@
+ 
+ struct ShellView: View {
+     @State private var selected: Module = .status
++    @StateObject private var cleanEngine = CleanEngine()
++    @StateObject private var uninstallEngine = UninstallEngine()
++    @StateObject private var analyzeEngine = AnalyzeEngine()
+ 
+     var body: some View {
+         NavigationSplitView {
+@@ -106,10 +109,10 @@
+     @ViewBuilder
+     private var detail: some View {
+         switch selected {
+-        case .clean: CleanView()
+-        case .uninstall: UninstallView()
++        case .clean: CleanView(engine: cleanEngine)
++        case .uninstall: UninstallView(engine: uninstallEngine)
+         case .optimize: OptimizeView()
+-        case .analyze: AnalyzeView()
++        case .analyze: AnalyzeView(engine: analyzeEngine)
+         case .status: StatusView()
+         }
+     }
+--- original/Theme.swift
++++ Sources/Sweep/Theme.swift
+@@ -14,6 +14,12 @@
+         if score >= 80 { return accent }
+         if score >= 50 { return accentWarn }
+         return accentDanger
++    }
++
++    static func usageColor(_ percent: Double) -> Color {
++        if percent >= 90 { return accentDanger }
++        if percent >= 80 { return accentWarn }
++        return accent
+     }
+ }
+ 
+@@ -84,7 +90,6 @@
+                 .trim(from: 0, to: min(max(value, 0.001), 1))
+                 .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                 .rotationEffect(.degrees(-90))
+-                .animation(.easeOut(duration: 0.4), value: value)
+         }
+     }
+ }
+--- original/Uninstall.swift
++++ Sources/Sweep/Uninstall.swift
+@@ -153,7 +153,7 @@
+ // MARK: - 视图
+ 
+ struct UninstallView: View {
+-    @StateObject private var engine = UninstallEngine()
++    @ObservedObject var engine: UninstallEngine
+     @State private var searching = ""
+     @State private var confirmUninstall = false
+ 
+@@ -219,7 +219,7 @@
+             .padding(20)
+         }
+         .background(Theme.bg)
+-        .onAppear { engine.load() }
++        .onAppear { if engine.apps.isEmpty && !engine.loading { engine.load() } }
+         .alert("确认卸载？", isPresented: $confirmUninstall) {
+             Button("卸载所选", role: .destructive) { engine.uninstallSelected() }
+             Button("取消", role: .cancel) {}

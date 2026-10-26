@@ -1,0 +1,54 @@
+/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/before-cleanup-0.2.1/Sources/Sweep/Common.swift:103:17: warning: initialization of immutable value 'nsTarget' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+101 |             }
+102 |             let url = URL(fileURLWithPath: (path as NSString).standardizingPath)
+103 |             let nsTarget = NSURL(fileURLWithPath: url.path)
+    |                 `- warning: initialization of immutable value 'nsTarget' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+104 |             var resultURL: NSURL?
+105 |             switch mode {
+
+/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/before-cleanup-0.2.1/Sources/Sweep/Common.swift:134:9: warning: no calls to throwing functions occur within 'try' expression
+132 |             .replacingOccurrences(of: "\"", with: "\\\"")
+133 |         let script = "do shell script \"rm -rf '\(escaped)'\" with administrator privileges"
+134 |         try NSAppleScript(source: script)?.executeAndReturnError(nil)
+    |         `- warning: no calls to throwing functions occur within 'try' expression
+135 |         OperationsLog.write("ADMIN-DELETE \(path)")
+136 |     }
+/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/before-cleanup-0.2.1/Sources/Sweep/Optimize.swift:101:17: warning: initialization of immutable value 'desc' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+ 99 |             "do shell script \"\(escaped)\" with administrator privileges") {
+100 |             var error: NSDictionary? = nil
+101 |             let desc = script.executeAndReturnError(&error)
+    |                 `- warning: initialization of immutable value 'desc' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+102 |             if let e = error {
+103 |                 ok = false
+
+/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/before-cleanup-0.2.1/Sources/Sweep/Optimize.swift:233:21: warning: capture of 'self' with non-Sendable type 'OptimizeRunner?' in a '@Sendable' closure [#SendableClosureCaptures]
+221 | }
+222 | 
+223 | final class OptimizeRunner: ObservableObject {
+    |             `- note: class 'OptimizeRunner' does not conform to the 'Sendable' protocol
+224 |     @Published var runningTask: String? = nil
+225 |     @Published var results: [String: String] = [:]
+    :
+231 |             OptimizeCatalog.execute(task: task) { [weak self] msg, _ in
+232 |                 DispatchQueue.main.async {
+233 |                     self?.results[task.id] = msg
+    |                     `- warning: capture of 'self' with non-Sendable type 'OptimizeRunner?' in a '@Sendable' closure [#SendableClosureCaptures]
+234 |                     self?.runningTask = nil
+235 |                 }
+
+/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/before-cleanup-0.2.1/Sources/Sweep/Optimize.swift:255:21: warning: capture of 'self' with non-Sendable type 'OptimizeRunner?' in a '@Sendable' closure [#SendableClosureCaptures]
+221 | }
+222 | 
+223 | final class OptimizeRunner: ObservableObject {
+    |             `- note: class 'OptimizeRunner' does not conform to the 'Sendable' protocol
+224 |     @Published var runningTask: String? = nil
+225 |     @Published var results: [String: String] = [:]
+    :
+253 |             OptimizeCatalog.execute(task: task) { [weak self] msg, _ in
+254 |                 DispatchQueue.main.async {
+255 |                     self?.results[task.id] = msg
+    |                     `- warning: capture of 'self' with non-Sendable type 'OptimizeRunner?' in a '@Sendable' closure [#SendableClosureCaptures]
+256 |                 }
+257 |                 self?.executeChain(tasks, index: index + 1, last: last)
+
+[#SendableClosureCaptures]: <https://docs.swift.org/compiler/documentation/diagnostics/sendable-closure-captures>

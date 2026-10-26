@@ -1,0 +1,5 @@
+FAIL known cache is admitted by the old cleanup gate
+FAIL cache preview begins unselected
+FAIL Xcode Archives is excluded from recommended cleanup
+FAIL Trash is excluded from recommended cache cleanup
+0/4 expected cleanup behaviors passed before changes

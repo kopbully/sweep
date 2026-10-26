@@ -1,0 +1,59 @@
+warning: /Users/focus/Library/org.swift.swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /Users/focus/Library/org.swift.swiftpm/security is not accessible or not writable, disabling user-level cache features.
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--1AB21518FC5DEDBE.txt
+[3/12] Compiling Sweep BlackHole.swift
+[4/12] Compiling Sweep BlackHoleTrash.swift
+[5/12] Emitting module Sweep
+[6/12] Compiling Sweep Status.swift
+[7/12] Compiling Sweep Theme.swift
+[8/12] Compiling Sweep SweepApp.swift
+[9/12] Compiling Sweep Analyze.swift
+[10/15] Compiling Sweep Clean.swift
+[11/15] Compiling Sweep Uninstall.swift
+[12/15] Compiling Sweep Optimize.swift
+/Users/focus/Documents/ChatGPT/逆向/Sweep/Sources/Sweep/Optimize.swift:101:17: warning: initialization of immutable value 'desc' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+ 99 |             "do shell script \"\(escaped)\" with administrator privileges") {
+100 |             var error: NSDictionary? = nil
+101 |             let desc = script.executeAndReturnError(&error)
+    |                 `- warning: initialization of immutable value 'desc' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+102 |             if let e = error {
+103 |                 ok = false
+
+/Users/focus/Documents/ChatGPT/逆向/Sweep/Sources/Sweep/Optimize.swift:233:21: warning: capture of 'self' with non-Sendable type 'OptimizeRunner?' in a '@Sendable' closure [#SendableClosureCaptures]
+221 | }
+222 | 
+223 | final class OptimizeRunner: ObservableObject {
+    |             `- note: class 'OptimizeRunner' does not conform to the 'Sendable' protocol
+224 |     @Published var runningTask: String? = nil
+225 |     @Published var results: [String: String] = [:]
+    :
+231 |             OptimizeCatalog.execute(task: task) { [weak self] msg, _ in
+232 |                 DispatchQueue.main.async {
+233 |                     self?.results[task.id] = msg
+    |                     `- warning: capture of 'self' with non-Sendable type 'OptimizeRunner?' in a '@Sendable' closure [#SendableClosureCaptures]
+234 |                     self?.runningTask = nil
+235 |                 }
+
+/Users/focus/Documents/ChatGPT/逆向/Sweep/Sources/Sweep/Optimize.swift:255:21: warning: capture of 'self' with non-Sendable type 'OptimizeRunner?' in a '@Sendable' closure [#SendableClosureCaptures]
+221 | }
+222 | 
+223 | final class OptimizeRunner: ObservableObject {
+    |             `- note: class 'OptimizeRunner' does not conform to the 'Sendable' protocol
+224 |     @Published var runningTask: String? = nil
+225 |     @Published var results: [String: String] = [:]
+    :
+253 |             OptimizeCatalog.execute(task: task) { [weak self] msg, _ in
+254 |                 DispatchQueue.main.async {
+255 |                     self?.results[task.id] = msg
+    |                     `- warning: capture of 'self' with non-Sendable type 'OptimizeRunner?' in a '@Sendable' closure [#SendableClosureCaptures]
+256 |                 }
+257 |                 self?.executeChain(tasks, index: index + 1, last: last)
+
+[#SendableClosureCaptures]: <https://docs.swift.org/compiler/documentation/diagnostics/sendable-closure-captures>
+[12/15] Write Objects.LinkFileList
+[13/15] Linking Sweep
+[14/15] Applying Sweep
+Build complete! (4.87s)

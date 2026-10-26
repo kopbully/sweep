@@ -1,0 +1,69 @@
+{
+  "scope": "Installed Sweep; main window closed; black-hole visible. WebKit child processes are not included. A manual drop request was pending during this interval.",
+  "samples": [
+    {
+      "monotonic": 69487.603012208,
+      "ps": "15465   6.0   0:03.82  68848 00:48 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69488.616465833,
+      "ps": "15465   5.8   0:03.88  68816 00:49 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69489.627405083,
+      "ps": "15465   4.9   0:03.93  67216 00:50 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69490.636077375,
+      "ps": "15465   6.2   0:03.99  66304 00:51 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69491.643751541,
+      "ps": "15465   4.8   0:04.04  66384 00:52 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69492.652557541,
+      "ps": "15465   5.6   0:04.10  66384 00:53 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69493.662175958,
+      "ps": "15465   5.0   0:04.16  65968 00:54 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69494.671448125,
+      "ps": "15465   4.6   0:04.21  65904 00:55 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69495.686404625,
+      "ps": "15465   4.3   0:04.26  64944 00:56 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69496.692300083,
+      "ps": "15465   4.1   0:04.30  63120 00:57 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69497.701748375,
+      "ps": "15465   4.7   0:04.35  63072 00:58 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69498.710041208,
+      "ps": "15465   3.4   0:04.39  61968 00:59 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69499.719816083,
+      "ps": "15465   5.7   0:04.44  62160 01:00 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69500.731137375,
+      "ps": "15465   5.0   0:04.50  62144 01:01 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69501.739508666,
+      "ps": "15465   5.4   0:04.56  62512 01:02 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    },
+    {
+      "monotonic": 69502.753054083,
+      "ps": "15465   6.6   0:04.62  62512 01:03 /Applications/Sweep.app/Contents/MacOS/Sweep"
+    }
+  ]
+}

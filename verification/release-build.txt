@@ -1,0 +1,7 @@
+
+[#SendableClosureCaptures]: <https://docs.swift.org/compiler/documentation/diagnostics/sendable-closure-captures>
+[3/5] Write Objects.LinkFileList
+[4/5] Linking Sweep
+Build complete! (6.18s)
+Sweep.app: replacing existing signature
+✅ Built Sweep.app — 双击运行，或: open Sweep.app

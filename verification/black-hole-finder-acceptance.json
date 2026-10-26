@@ -1,0 +1,28 @@
+{
+  "verified_at": "2026-10-26T02:48:29.473387+08:00",
+  "version": "0.2.1",
+  "user_observation": "文件被吸入，原位置文件消失",
+  "source": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/black-hole-ui-fixtures/Sweep 黑洞吸入测试.txt",
+  "source_exists": false,
+  "trash_file": {
+    "path": "/Users/focus/.Trash/Sweep 黑洞吸入测试.txt",
+    "size": 80,
+    "sha256": "2e821a5134e5a83757512b84031cc31766bcfab0bc995d7b8f8ff8e5fab11a2a",
+    "expected_content_matched": true
+  },
+  "events": [
+    "[2026/10/26 02:27:11] BLACKHOLE READY",
+    "[2026/10/26 02:45:23] BLACKHOLE POINTER_ENTER",
+    "[2026/10/26 02:45:23] BLACKHOLE POINTER_LEAVE",
+    "[2026/10/26 02:45:24] BLACKHOLE POINTER_ENTER",
+    "[2026/10/26 02:45:25] BLACKHOLE POINTER_LEAVE",
+    "[2026/10/26 02:45:50] BLACKHOLE POINTER_ENTER",
+    "[2026/10/26 02:45:50] BLACKHOLE DRAG_ENTER files=1 source=55 ready=true x=219 y=55",
+    "[2026/10/26 02:45:51] BLACKHOLE DRAG_PREPARE accepted=true",
+    "[2026/10/26 02:45:51] BLACKHOLE DROP count=1",
+    "[2026/10/26 02:45:51] BLACKHOLE TRASH ok=1 failed=0",
+    "[2026/10/26 02:45:52] BLACKHOLE ABSORB_COMPLETE count=1",
+    "[2026/10/26 02:45:54] BLACKHOLE POINTER_LEAVE"
+  ],
+  "test_file_left_in_trash": true
+}

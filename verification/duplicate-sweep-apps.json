@@ -1,0 +1,89 @@
+{
+  "generatedAt": "2026-10-26T08:37:40+08:00",
+  "policy": "Removed only app bundles whose full bundle tree hash matched a retained copy; preserved installed 0.3.0, one 0.2.1 rollback, and unique historical builds.",
+  "removedCount": 6,
+  "removedPayloadBytes": 10997762,
+  "removedBundles": [
+    {
+      "path": "/Users/focus/Documents/ChatGPT/逆向/Sweep/Sweep.app",
+      "version": "0.3.0",
+      "sha256Tree": "66b8a199775ad12f4d9e9e21b23a8004c66d4ca33931c44ec22ffee43c2ffe22",
+      "retain": "/Applications/Sweep.app",
+      "payloadBytes": 2516961
+    },
+    {
+      "path": "/Users/focus/Sweep/Sweep.app",
+      "version": "0.2.1",
+      "sha256Tree": "c6363d3ffaac6acabe48b3ce9c3aec0524f734e85f20ddc678ab927d3e62c52c",
+      "retain": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/before-cleanup-0.2.1/Sweep.app",
+      "payloadBytes": 2092801
+    },
+    {
+      "path": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/black-hole-0.2.0/Applications-Sweep.app",
+      "version": "0.2.0",
+      "sha256Tree": "d03ec2003dbbcfa27d10cc2a6edfe25064130a56232e783144d1355070a8a609",
+      "retain": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/black-hole-0.2.0/source-Sweep.app",
+      "payloadBytes": 2092145
+    },
+    {
+      "path": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/black-hole-installed-backup/source-Sweep.app",
+      "version": "0.1.1",
+      "sha256Tree": "028d5eecc755d6278e76e74e62bcf27313782c5a1ec4d89347099e8961673393",
+      "retain": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/before-black-hole/Sweep.app",
+      "payloadBytes": 1461541
+    },
+    {
+      "path": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/black-hole-installed-backup/Applications-Sweep.app",
+      "version": "0.1.1",
+      "sha256Tree": "028d5eecc755d6278e76e74e62bcf27313782c5a1ec4d89347099e8961673393",
+      "retain": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/before-black-hole/Sweep.app",
+      "payloadBytes": 1461541
+    },
+    {
+      "path": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/replaced-original.app",
+      "version": "0.1.0",
+      "sha256Tree": "e597aca40d758c64f6dafd49c6bf5e74c597cbd3306b770721ca375c67b97b9d",
+      "retain": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/backup-before-update/Sweep.app",
+      "payloadBytes": 1372773
+    }
+  ],
+  "retainedBundles": [
+    {
+      "path": "/Applications/Sweep.app",
+      "version": "0.3.0",
+      "sha256Tree": "66b8a199775ad12f4d9e9e21b23a8004c66d4ca33931c44ec22ffee43c2ffe22",
+      "reason": "installed release"
+    },
+    {
+      "path": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/before-cleanup-0.2.1/Sweep.app",
+      "version": "0.2.1",
+      "sha256Tree": "c6363d3ffaac6acabe48b3ce9c3aec0524f734e85f20ddc678ab927d3e62c52c",
+      "reason": "single rollback checkpoint"
+    },
+    {
+      "path": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/black-hole-0.2.0/source-Sweep.app",
+      "version": "0.2.0",
+      "sha256Tree": "d03ec2003dbbcfa27d10cc2a6edfe25064130a56232e783144d1355070a8a609",
+      "reason": "unique historical build"
+    },
+    {
+      "path": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/before-black-hole/Sweep.app",
+      "version": "0.1.1",
+      "sha256Tree": "028d5eecc755d6278e76e74e62bcf27313782c5a1ec4d89347099e8961673393",
+      "reason": "single historical copy"
+    },
+    {
+      "path": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/backup-before-update/Sweep.app",
+      "version": "0.1.0",
+      "sha256Tree": "e597aca40d758c64f6dafd49c6bf5e74c597cbd3306b770721ca375c67b97b9d",
+      "reason": "single historical copy"
+    },
+    {
+      "path": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/first-ui-verified-build/Sweep.app",
+      "version": "0.1.1",
+      "sha256Tree": "ddabe8597f76f36cdbecda6cdc050b3606b09cfaa2f846b11d6ae7d492ff5c4c",
+      "reason": "different build, retained as unique evidence"
+    }
+  ],
+  "verification": "All removal targets absent; retained bundle versions and tree hashes rechecked after cleanup."
+}

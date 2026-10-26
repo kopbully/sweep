@@ -1,0 +1,37 @@
+probeStart 2026-10-25 05:37:47 +0000
+CPU kr 0 processors 10 count 40 CPU_STATE_MAX 4 structBytes 16 originalGuard false originalCpu 0.0
+CPU delta 10.468594217347956
+NETWORK_STRUCT_BYTES 96 128
+IFACE lo0 flags 32841 if_data 469055763 469055763 if_data64 0 1792855634
+IFACE gif0 flags 32784 if_data 0 0 if_data64 0 1792855634
+IFACE stf0 flags 0 if_data 0 0 if_data64 0 1792855634
+IFACE anpi0 flags 34915 if_data 0 0 if_data64 0 1792855634
+IFACE anpi1 flags 34915 if_data 0 0 if_data64 0 1792855634
+IFACE en3 flags 34915 if_data 0 0 if_data64 0 1792855638
+IFACE en4 flags 34915 if_data 0 0 if_data64 0 1792855638
+IFACE en1 flags 35171 if_data 0 0 if_data64 0 1792855640
+IFACE en2 flags 35171 if_data 0 0 if_data64 0 1792855640
+IFACE bridge0 flags 34915 if_data 0 0 if_data64 0 1792855640
+IFACE ap1 flags 34915 if_data 0 0 if_data64 0 1792855660
+IFACE en0 flags 34915 if_data 1336088337 1197820553 if_data64 0 1792864251
+IFACE utun0 flags 32849 if_data 0 11038 if_data64 0 1792868323
+IFACE awdl0 flags 34915 if_data 1558153 66436071 if_data64 0 1792905302
+IFACE llw0 flags 34915 if_data 0 0 if_data64 0 1792905302
+IFACE nan0 flags 34850 if_data 0 0 if_data64 0 1792855662
+IFACE utun1 flags 32849 if_data 0 11158 if_data64 0 1792868323
+IFACE utun2 flags 32849 if_data 0 11158 if_data64 0 1792868323
+IFACE utun3 flags 32849 if_data 0 100 if_data64 0 1792855664
+IFACE utun4 flags 32849 if_data 64938 50685 if_data64 0 1792867558
+IFACE utun5 flags 32849 if_data 0 11098 if_data64 0 1792868323
+IFACE utun6 flags 32849 if_data 0 11098 if_data64 0 1792868323
+IFACE utun7 flags 32849 if_data 0 11158 if_data64 0 1792868323
+IFACE utun8 flags 32849 if_data 0 11158 if_data64 0 1792868323
+IFACE utun9 flags 32849 if_data 622172914 330726644 if_data64 0 1792905318
+MEMORY kr 0 physical 17179869184 page 16384 free 86137 active 172128 inactive 158141 wired 145009 purgeable 4947 compressor 448456 external 154973 speculative 12944 original (used: 13096566784, total: 17179869184)
+DISK / total 245107195904 avail 20316160000 important 0
+DISK /System/Volumes/Data total 245107195904 avail 20316160000 important 0
+SAMPLE_MS 0 6.241333
+SAMPLE_MS 1 4.941834
+SAMPLE_MS 2 4.492167
+SAMPLE_MS 3 4.0785
+SAMPLE_MS 4 3.964417

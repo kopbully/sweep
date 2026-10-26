@@ -1,0 +1,38 @@
+{
+  "installed_app": "/Users/focus/Sweep/Sweep.app",
+  "version": "0.1.1",
+  "changed_source_files": [
+    "Sources/Sweep/Clean.swift",
+    "Sources/Sweep/Common.swift",
+    "Sources/Sweep/SweepApp.swift",
+    "Sources/Sweep/Analyze.swift",
+    "Sources/Sweep/Status.swift",
+    "Sources/Sweep/Uninstall.swift",
+    "README.md",
+    "Scripts/make_app.sh",
+    "Scripts/test.sh",
+    "Tests/Regression.swift",
+    "verification/investigation.md",
+    "verification/regression-after.txt",
+    "verification/live-system-readings.json",
+    "Sources/Sweep/Theme.swift"
+  ],
+  "backup": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/backup-before-update",
+  "old_app_retained": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/replaced-original.app",
+  "binary_sha256": "3f7198d55d6c46c11e5bde2a16680d52c474c789d3c4a1dcf960ea6d01b30f86",
+  "intermediate_checkpoint": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/first-ui-verified-build",
+  "verification_files": [
+    "investigation.md",
+    "regression-after.txt",
+    "size-regression-before.txt",
+    "live-system-readings.json",
+    "baseline-performance.json",
+    "after-performance.json",
+    "final-performance.json",
+    "build-result.json",
+    "ui-validation.json",
+    "release-build.txt",
+    "installed.json",
+    "changes.patch"
+  ]
+}

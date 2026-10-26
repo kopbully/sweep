@@ -1,0 +1,42 @@
+{
+  "cpu_interval_percent" : 23.584905660377359,
+  "disk_free_bytes" : 19637059584,
+  "disk_total_bytes" : 245107195904,
+  "download_bytes_per_second" : 183605,
+  "largest_rss_processes" : [
+    {
+      "cpu" : 99.5,
+      "name" : "Codex (Renderer)",
+      "pid" : 82995,
+      "rss_bytes" : 613793792
+    },
+    {
+      "cpu" : 0,
+      "name" : "Google Chrome Helper (Aperitif Renderer)",
+      "pid" : 19505,
+      "rss_bytes" : 325386240
+    },
+    {
+      "cpu" : 0.69999999999999996,
+      "name" : "ChatGPT",
+      "pid" : 82906,
+      "rss_bytes" : 274644992
+    },
+    {
+      "cpu" : 3.6000000000000001,
+      "name" : "codex",
+      "pid" : 82997,
+      "rss_bytes" : 251969536
+    },
+    {
+      "cpu" : 0,
+      "name" : "Google Chrome",
+      "pid" : 1657,
+      "rss_bytes" : 211206144
+    }
+  ],
+  "memory_total_bytes" : 17179869184,
+  "memory_used_bytes" : 13382189056,
+  "process_count" : 665,
+  "upload_bytes_per_second" : 35846
+}

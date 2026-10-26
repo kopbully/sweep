@@ -1,0 +1,13 @@
+{
+  "README.md": "b1e3039ba081e0a026228659998204db6e5566edd9f4942e5a07e70780d57c9a",
+  "Package.swift": "60503bc1a73684b20004c08484006913da999a30ca6604e1e401c09ed4adb401",
+  "Scripts/make_app.sh": "c474f6dfa7ff309c4517094b3543d760d725ec1e1d10adaa1d4f849daf0d068a",
+  "Sources/Sweep/Clean.swift": "6a93b1b77a3611373b9286baef1ee8953c5025d8a8e48f1adc97b99b74c4e205",
+  "Sources/Sweep/Common.swift": "894fb82a1c9f34d0eddc7b4306b2f4134d6787e4352643dfe78071aaf4a6d140",
+  "Sources/Sweep/SweepApp.swift": "07647443fdf28355c268771c188fd85b8943536ff290ac791ff212d941c5d38b",
+  "Sources/Sweep/Analyze.swift": "26da015a2f3e8de7592e835afc9424b486b07a82d9c241ebcd73d82b0cd8e1a2",
+  "Sources/Sweep/Status.swift": "bd15b5b8ca5689671a4d429e91f938a199729cca2a91848a9c9629ecf678d82f",
+  "Sources/Sweep/Theme.swift": "d209edc383422aedea0b24c326d2e632c62879d7d3d7094f1624044cca8b466e",
+  "Sources/Sweep/Uninstall.swift": "50bda938054f49e9e40afcd65bb8f78d931d4ee4b99327238771c51f18260978",
+  "Sources/Sweep/Optimize.swift": "bf4101ad3a8449a897f636fadb672daddf405f3dcb251811394f4d742d66273e"
+}

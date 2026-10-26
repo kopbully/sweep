@@ -1,0 +1,25 @@
+{
+  "installed_app": "/Users/focus/Sweep/Sweep.app",
+  "version": "0.1.1",
+  "final_pid": 50458,
+  "launched_and_visible": true,
+  "cpu_and_network_live_values_visible": true,
+  "memory_total_visible": "16 GB",
+  "final_memory_sort": true,
+  "name_sort_with_pin": true,
+  "final_pin": true,
+  "final_unpin": true,
+  "cpu_sort_restored": true,
+  "monitor_optimize_navigation_cycles": 10,
+  "maintenance_executed": false,
+  "user_files_deleted": false,
+  "visual_review": "Passed; no wrapped picker title, usage colors follow 80/90 thresholds",
+  "screenshot_observed_values": {
+    "system_cpu": "29%",
+    "memory_used": "12.33 GB",
+    "download": "737 KB/s",
+    "upload": "30 KB/s",
+    "disk_free": "18.87 GB",
+    "disk_total": "245.11 GB"
+  }
+}

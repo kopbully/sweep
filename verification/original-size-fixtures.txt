@@ -1,0 +1,19 @@
+{"actual":0,"case":"ordinary-file-root","expected":4096,"path":"\/private\/tmp\/sweep-size-investigation.KAq0kY\/fixtures2\/ordinary\/file.bin","sizeIfPresent":0}
+{"actual":4096,"case":"ordinary-directory","expected":4096,"path":"\/private\/tmp\/sweep-size-investigation.KAq0kY\/fixtures2\/ordinary","sizeIfPresent":4096}
+{"actual":8192,"case":"app-root","expected":8192,"path":"\/private\/tmp\/sweep-size-investigation.KAq0kY\/fixtures2\/package-parent\/Fake.app","sizeIfPresent":8192}
+{"actual":0,"case":"parent-of-app","expected":8192,"path":"\/private\/tmp\/sweep-size-investigation.KAq0kY\/fixtures2\/package-parent","sizeIfPresent":0}
+{"actual":7168,"case":"app-with-nested-packages","expected":7168,"path":"\/private\/tmp\/sweep-size-investigation.KAq0kY\/fixtures2\/nested\/Fake.app","sizeIfPresent":7168}
+{"actual":0,"case":"directory-symlink-root","expected":0,"path":"\/private\/tmp\/sweep-size-investigation.KAq0kY\/fixtures2\/link-dir-root","sizeIfPresent":0}
+{"actual":512,"case":"directory-containing-symlinks","expected":512,"path":"\/private\/tmp\/sweep-size-investigation.KAq0kY\/fixtures2\/link-inside","sizeIfPresent":512}
+{"actual":4096,"case":"directory-hardlinks","expected":4096,"path":"\/private\/tmp\/sweep-size-investigation.KAq0kY\/fixtures2\/hard","sizeIfPresent":4096}
+hardlink-identity device=16777232 inode=71587273 links=2
+metadata /private/tmp/sweep-size-investigation.KAq0kY/fixtures2/package-parent/Fake.app: package=Optional(true) link=Optional(false) regular=Optional(false) dir=Optional(true)
+metadata /private/tmp/sweep-size-investigation.KAq0kY/fixtures2/nested/Fake.app/Contents/Frameworks/Nested.framework: package=Optional(false) link=Optional(false) regular=Optional(false) dir=Optional(true)
+metadata /private/tmp/sweep-size-investigation.KAq0kY/fixtures2/nested/Fake.app/Contents/Resources/Nested.bundle: package=Optional(false) link=Optional(false) regular=Optional(false) dir=Optional(true)
+metadata /private/tmp/sweep-size-investigation.KAq0kY/fixtures2/link-dir-root: package=Optional(false) link=Optional(true) regular=Optional(false) dir=Optional(false)
+metadata /private/tmp/sweep-size-investigation.KAq0kY/fixtures2/link-inside/external-file: package=Optional(false) link=Optional(true) regular=Optional(false) dir=Optional(false)
+{"actual":1024,"case":"app-with-nested-app","expected":3072,"path":"\/private\/tmp\/sweep-size-investigation.KAq0kY\/fixtures2\/nested-helper\/Fake.app","sizeIfPresent":1024}
+{"actual":4096,"case":"hardlinks-across-child-dirs-whole","expected":4096,"path":"\/private\/tmp\/sweep-size-investigation.KAq0kY\/fixtures2\/cross-child","sizeIfPresent":4096}
+analyze-child-sum=8192 expected-whole=4096
+valid-bundle-isPackage=Optional(false)
+{"actual":2407,"case":"parent-of-valid-bundle","expected":2407,"path":"\/private\/tmp\/sweep-size-investigation.KAq0kY\/fixtures2\/valid-bundle","sizeIfPresent":2407}

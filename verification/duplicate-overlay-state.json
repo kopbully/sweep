@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-10-26T13:10:35+08:00",
+  "sweepProcesses": [
+    "68893 /Applications/Sweep.app/Contents/MacOS/Sweep"
+  ],
+  "floatingWidgetProcesses": [],
+  "windows": [
+    {
+      "owner": "Sweep",
+      "title": "Sweep 桌面黑洞",
+      "width": 240,
+      "height": 240,
+      "x": 1206,
+      "y": 554,
+      "layer": 3,
+      "pid": 68893
+    },
+    {
+      "owner": "Sweep",
+      "title": "Sweep",
+      "width": 1020,
+      "height": 712,
+      "x": 263,
+      "y": 54,
+      "layer": 0,
+      "pid": 68893
+    }
+  ],
+  "removed": {
+    "app": "/Applications/DiskPilot.app -> ~/.Trash/DiskPilot.app",
+    "launchAgent": "~/Library/LaunchAgents/com.diskpilot.widget.plist",
+    "backup": "~/ZCodeProject/disk-monitor/_removed-20261026/"
+  },
+  "note": "Sweep 240x240 面板为唯一黑洞悬浮窗；Python 悬浮小组件进程与窗口均已消失。"
+}

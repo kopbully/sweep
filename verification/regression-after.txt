@@ -1,0 +1,87 @@
+Sources/Sweep/Common.swift:103:17: warning: initialization of immutable value 'nsTarget' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+101 |             }
+102 |             let url = URL(fileURLWithPath: (path as NSString).standardizingPath)
+103 |             let nsTarget = NSURL(fileURLWithPath: url.path)
+    |                 `- warning: initialization of immutable value 'nsTarget' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+104 |             var resultURL: NSURL?
+105 |             switch mode {
+
+Sources/Sweep/Common.swift:134:9: warning: no calls to throwing functions occur within 'try' expression
+132 |             .replacingOccurrences(of: "\"", with: "\\\"")
+133 |         let script = "do shell script \"rm -rf '\(escaped)'\" with administrator privileges"
+134 |         try NSAppleScript(source: script)?.executeAndReturnError(nil)
+    |         `- warning: no calls to throwing functions occur within 'try' expression
+135 |         OperationsLog.write("ADMIN-DELETE \(path)")
+136 |     }
+Sources/Sweep/Optimize.swift:101:17: warning: initialization of immutable value 'desc' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+ 99 |             "do shell script \"\(escaped)\" with administrator privileges") {
+100 |             var error: NSDictionary? = nil
+101 |             let desc = script.executeAndReturnError(&error)
+    |                 `- warning: initialization of immutable value 'desc' was never used; consider replacing with assignment to '_' or removing it [#no-usage]
+102 |             if let e = error {
+103 |                 ok = false
+
+Sources/Sweep/Optimize.swift:233:21: warning: capture of 'self' with non-Sendable type 'OptimizeRunner?' in a '@Sendable' closure [#SendableClosureCaptures]
+221 | }
+222 | 
+223 | final class OptimizeRunner: ObservableObject {
+    |             `- note: class 'OptimizeRunner' does not conform to the 'Sendable' protocol
+224 |     @Published var runningTask: String? = nil
+225 |     @Published var results: [String: String] = [:]
+    :
+231 |             OptimizeCatalog.execute(task: task) { [weak self] msg, _ in
+232 |                 DispatchQueue.main.async {
+233 |                     self?.results[task.id] = msg
+    |                     `- warning: capture of 'self' with non-Sendable type 'OptimizeRunner?' in a '@Sendable' closure [#SendableClosureCaptures]
+234 |                     self?.runningTask = nil
+235 |                 }
+
+Sources/Sweep/Optimize.swift:255:21: warning: capture of 'self' with non-Sendable type 'OptimizeRunner?' in a '@Sendable' closure [#SendableClosureCaptures]
+221 | }
+222 | 
+223 | final class OptimizeRunner: ObservableObject {
+    |             `- note: class 'OptimizeRunner' does not conform to the 'Sendable' protocol
+224 |     @Published var runningTask: String? = nil
+225 |     @Published var results: [String: String] = [:]
+    :
+253 |             OptimizeCatalog.execute(task: task) { [weak self] msg, _ in
+254 |                 DispatchQueue.main.async {
+255 |                     self?.results[task.id] = msg
+    |                     `- warning: capture of 'self' with non-Sendable type 'OptimizeRunner?' in a '@Sendable' closure [#SendableClosureCaptures]
+256 |                 }
+257 |                 self?.executeChain(tasks, index: index + 1, last: last)
+
+[#SendableClosureCaptures]: <https://docs.swift.org/compiler/documentation/diagnostics/sendable-closure-captures>
+PASS ordinary file counts its own bytes
+PASS sizeIfPresent includes ordinary files
+PASS nested application packages are included
+PASS hard links count once within one tree
+PASS root symlink is not followed
+PASS nested symlink is not followed
+PASS missing path returns zero
+PASS CPU uses interval ticks rather than uptime totals
+PASS idle CPU reports a valid zero
+PASS first CPU sample waits for baseline
+PASS unchanged ticks do not invent CPU load
+PASS CPU topology change waits for new baseline
+PASS CPU tick overflow is handled
+PASS live CPU counters have the kernel layout
+PASS network uses elapsed monotonic seconds
+PASS first network sample waits for baseline
+PASS reconnected interface does not create a spike
+PASS 32-bit network counters wrap correctly
+PASS new interface does not count historical traffic
+PASS process parser skips malformed rows
+PASS RSS KiB converts to bytes exactly
+PASS process names preserve spaces
+PASS ps child is excluded by PID
+PASS cache candidates deduplicate normalized paths
+PASS specialized cache category takes precedence
+PASS cache total counts each candidate once
+PASS scan navigation cannot relabel in-flight results
+PASS repeated start has one sampling loop
+PASS live CPU gets a valid interval sample
+PASS stop cancels future publication
+PASS restart establishes a fresh CPU baseline
+PASS restart clears history across a sampling gap
+32/32 checks passed

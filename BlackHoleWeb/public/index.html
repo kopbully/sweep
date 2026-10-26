@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data:; connect-src 'none'; font-src 'none'">
+    <title>Sweep 黑洞</title>
+    <link rel="stylesheet" href="./black-hole.css">
+  </head>
+  <body>
+    <main id="hole" aria-label="拖入文件，移到废纸篓">
+      <canvas id="space" aria-hidden="true"></canvas>
+      <div id="files" aria-hidden="true"></div>
+      <div id="status" role="status" aria-live="polite"></div>
+      <div id="failures" role="alert"></div>
+    </main>
+    <script src="./black-hole.js"></script>
+  </body>
+</html>

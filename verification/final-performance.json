@@ -1,0 +1,117 @@
+{
+  "pid": 50458,
+  "duration_seconds": 15.17794862500159,
+  "interval_cpu_percent": 2.898942478137119,
+  "first": {
+    "wall": 61077.371664416,
+    "cpu_seconds": 3.57,
+    "rss_kb": 151328,
+    "ps_cpu_percent": 4.4
+  },
+  "last": {
+    "wall": 61092.549613041,
+    "cpu_seconds": 4.01,
+    "rss_kb": 151456,
+    "ps_cpu_percent": 1.6
+  },
+  "process_count": 625,
+  "samples": [
+    {
+      "wall": 61077.371664416,
+      "cpu_seconds": 3.57,
+      "rss_kb": 151328,
+      "ps_cpu_percent": 4.4
+    },
+    {
+      "wall": 61078.385105416,
+      "cpu_seconds": 3.59,
+      "rss_kb": 151328,
+      "ps_cpu_percent": 0.0
+    },
+    {
+      "wall": 61079.397077125,
+      "cpu_seconds": 3.63,
+      "rss_kb": 151408,
+      "ps_cpu_percent": 0.7
+    },
+    {
+      "wall": 61080.407585291,
+      "cpu_seconds": 3.64,
+      "rss_kb": 151312,
+      "ps_cpu_percent": 0.1
+    },
+    {
+      "wall": 61081.420167375,
+      "cpu_seconds": 3.69,
+      "rss_kb": 151296,
+      "ps_cpu_percent": 1.2
+    },
+    {
+      "wall": 61082.430897583,
+      "cpu_seconds": 3.7,
+      "rss_kb": 151296,
+      "ps_cpu_percent": 0.2
+    },
+    {
+      "wall": 61083.444409791,
+      "cpu_seconds": 3.76,
+      "rss_kb": 151280,
+      "ps_cpu_percent": 1.6
+    },
+    {
+      "wall": 61084.452654708,
+      "cpu_seconds": 3.77,
+      "rss_kb": 151280,
+      "ps_cpu_percent": 0.2
+    },
+    {
+      "wall": 61085.465055375,
+      "cpu_seconds": 3.82,
+      "rss_kb": 151392,
+      "ps_cpu_percent": 2.9
+    },
+    {
+      "wall": 61086.480737291,
+      "cpu_seconds": 3.83,
+      "rss_kb": 151392,
+      "ps_cpu_percent": 0.3
+    },
+    {
+      "wall": 61087.491182875,
+      "cpu_seconds": 3.88,
+      "rss_kb": 151408,
+      "ps_cpu_percent": 5.8
+    },
+    {
+      "wall": 61088.502264208,
+      "cpu_seconds": 3.89,
+      "rss_kb": 151408,
+      "ps_cpu_percent": 0.4
+    },
+    {
+      "wall": 61089.513475333,
+      "cpu_seconds": 3.91,
+      "rss_kb": 151424,
+      "ps_cpu_percent": 1.1
+    },
+    {
+      "wall": 61090.526576083,
+      "cpu_seconds": 3.95,
+      "rss_kb": 151392,
+      "ps_cpu_percent": 0.7
+    },
+    {
+      "wall": 61091.54100975,
+      "cpu_seconds": 3.97,
+      "rss_kb": 151376,
+      "ps_cpu_percent": 0.8
+    },
+    {
+      "wall": 61092.549613041,
+      "cpu_seconds": 4.01,
+      "rss_kb": 151456,
+      "ps_cpu_percent": 1.6
+    }
+  ],
+  "condition": "Final installed binary; monitor visible, CPU sort, no pin, scroll at top, no UI actions during measurement"
+}

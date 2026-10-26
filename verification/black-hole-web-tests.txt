@@ -1,0 +1,14 @@
+
+> sweep-black-hole@1.0.0 test
+> vitest run
+
+
+ RUN  v2.1.9 /Users/focus/Documents/ChatGPT/逆向/Sweep/BlackHoleWeb
+
+ ✓ test/widget.test.ts (12 tests) 4ms
+
+ Test Files  1 passed (1)
+      Tests  12 passed (12)
+   Start at  00:05:21
+   Duration  208ms (transform 39ms, setup 0ms, collect 32ms, tests 4ms, environment 0ms, prepare 47ms)
+

@@ -1,0 +1,16 @@
+{
+  "installed_at": "2026-10-26T02:27:06.320861+08:00",
+  "version": "0.2.1",
+  "apps": [
+    "/Applications/Sweep.app",
+    "/Users/focus/Sweep/Sweep.app"
+  ],
+  "changed_source_files": [
+    "Sources/Sweep/BlackHole.swift",
+    "Scripts/make_app.sh",
+    "Tests/Regression.swift",
+    "README.md"
+  ],
+  "backup": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/black-hole-0.2.0",
+  "binary_sha256": "ac2e2be75c4cd6c7f31ba47831db346d53adc0ab2372bfe7cd69c3c6a8ce4027"
+}

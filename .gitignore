@@ -1,0 +1,15 @@
+# 构建产物
+.build/
+.cache/
+*.app/
+
+# 依赖
+node_modules/
+.npm-cache/
+
+# 系统
+.DS_Store
+
+# 测试夹具（脚本可重新生成）
+verification/black-hole-fixtures/
+verification/black-hole-ui-fixtures/

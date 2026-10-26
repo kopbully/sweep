@@ -1,0 +1,18 @@
+{
+  "version": "0.1.1",
+  "binary_sha256": "3f7198d55d6c46c11e5bde2a16680d52c474c789d3c4a1dcf960ea6d01b30f86",
+  "installed_app": "/Users/focus/Sweep/Sweep.app",
+  "backup": "/Users/focus/Documents/ChatGPT/逆向/Sweep/verification/backup-before-update",
+  "regression_checks": 32,
+  "ui_verification": "passed",
+  "new_app_cpu_comparison": {
+    "before_percent": 46.85462958112615,
+    "final_percent": 2.898942478137119,
+    "relative_reduction_percent": 93.81290065879666,
+    "before_processes": 627,
+    "final_processes": 625,
+    "before_rss_kib": 127984,
+    "final_rss_kib": 151456,
+    "measurement": "~15 second CPU time delta per version; monitor visible; machine load and app uptime differ"
+  }
+}

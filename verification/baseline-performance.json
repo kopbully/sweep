@@ -1,0 +1,18 @@
+{
+  "pid": 35057,
+  "duration_seconds": 15.003853542002616,
+  "interval_cpu_percent": 46.85462958112615,
+  "first": {
+    "wall": 49485.868402333,
+    "cpu_seconds": 137.91,
+    "rss_kb": 129584,
+    "ps_cpu_percent": 48.6
+  },
+  "last": {
+    "wall": 49500.872255875,
+    "cpu_seconds": 144.94,
+    "rss_kb": 127984,
+    "ps_cpu_percent": 55.5
+  },
+  "process_count": 627
+}
