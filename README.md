@@ -28,6 +28,14 @@ open Sweep.app
 
 要求：macOS 13+，Apple Command Line Tools（无需完整 Xcode）。
 
+## 0.6.6 家目录之外的大块占用（磁盘占满的真凶）
+
+- 清理页新增卡片「家目录之外的大块占用」：系统升级残留、系统更新缓存、移动端更新残留、更新器临时副本、诊断日志、交换镜像。**只报告体积**，不越出清理器的家目录安全边界。
+- `adminStaging` 类（如 `macOS Install Data` 13.16 GB）提供「移除 · 需授权」，点一次弹一次系统授权；`userTempClone` 直接删 `X/*.code_sign_clone`；`infoOnly` 只显示「系统自管」。
+- 排查结论：`df` 在本机不可信（写入/删除 800 MB 数值不变），要看 `diskutil apfs list` 的 `Capacity Not Allocated`；`du` 对 APFS 克隆会按逻辑大小重复计数——21 GB 的 Chrome `code_sign_clone` 删掉后一个字节都没释放。
+- 但更新器泄漏是真的：GoogleUpdater 每 ~6 分钟复制一份 App 重新签名，2 分钟涨 1.4 GB × 2。停用三个 launch agent 后连续 7 分钟保持 0 B。恢复命令见 `verification/disk-full-0.6.6.md`。
+- 详见 `verification/disk-full-0.6.6.md`。
+
 ## 0.6.5 清理真的会清、授权只要给一次
 
 - **默认勾选全部可清理项**：以前只勾 `recommended`（pip / SwiftPM 这类保守项），120 个候选里只勾中 2 项 17 MB，点清理几乎看不出变化。现在新增 `CacheItem.autoSelected`：可清理 + 类别安全 + 非 `explicitOnly` 就默认勾上，主按钮直接写「清理 N 项 · X GB」，空选时点主按钮会自动全选。

@@ -323,6 +323,9 @@ struct CleanView: View {
     @State private var search = ""
     @State private var confirmClean = false
     @State private var confirmationItems: [CacheItem] = []
+    @State private var leftovers: [SystemLeftover] = []
+    @State private var leftoverMessage: String?
+    @State private var leftoverBusy = false
 
     private var filtered: [CacheItem] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -346,6 +349,7 @@ struct CleanView: View {
             LazyVStack(alignment: .leading, spacing: Space.s200) {
                 SectionTitle(title: "清理", subtitle: "查看已知缓存目录，按项选择后清理")
                 summaryCard
+                if !leftovers.isEmpty { systemLeftoverCard }
                 if engine.busy { progressCard }
                 if let report = engine.lastReport { resultCard(report) }
                 if let message = engine.lastMessage {
@@ -365,7 +369,10 @@ struct CleanView: View {
             .padding(Space.s300)
         }
         .background(Theme.bg)
-        .onAppear { if !engine.hasScanned && !engine.scanning { engine.scan() } }
+        .onAppear {
+            if !engine.hasScanned && !engine.scanning { engine.scan() }
+            if leftovers.isEmpty && !leftoverBusy { reloadLeftovers() }
+        }
         .onDisappear { engine.cancelScan() }
         .alert("永久清理所选缓存？", isPresented: $confirmClean) {
             Button("永久清理 \(confirmationItems.count) 项", role: .destructive) {
@@ -382,6 +389,85 @@ struct CleanView: View {
         guard !picked.isEmpty else { return "全选并清理" }
         let bytes = picked.reduce(Int64(0)) { $0 + $1.size }
         return "清理 \(picked.count) 项 · \(bytes.bytesText)"
+    }
+
+    /// 家目录之外的大块占用：清理器不越界，只报告体积 + 逐项确认移除
+    private var systemLeftoverCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: Space.s100) {
+                HStack {
+                    Text("家目录之外的大块占用").font(Typo.f(Typo.sm, .semibold))
+                    Spacer()
+                    SweepButton(.quiet, title: leftoverBusy ? "检测中…" : "重新检测") { reloadLeftovers() }
+                        .disabled(leftoverBusy)
+                }
+                Text("清理器只在你的主目录内工作，下面这些位置不会被自动清理。可移除的项目需要逐项确认，系统级项目会弹一次授权。")
+                    .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
+                ForEach(leftovers) { item in
+                    HStack(alignment: .top, spacing: Space.s100) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.title).font(Typo.f(Typo.sm))
+                            Text(item.detail).font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
+                            Text(item.path)
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundStyle(Theme.textMuted)
+                                .textSelection(.enabled)
+                        }
+                        Spacer()
+                        Text(item.size.bytesText)
+                            .font(Typo.f(Typo.sm, .medium)).monospacedDigit()
+                        if item.isRemovable {
+                            SweepButton(.quiet, title: item.needsAdmin ? "移除 · 需授权" : "移除") {
+                                removeLeftover(item)
+                            }
+                            .disabled(leftoverBusy)
+                        } else {
+                            Text("系统自管").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
+                        }
+                    }
+                    .padding(.vertical, Space.s50)
+                    Divider().opacity(0.4)
+                }
+                if let leftoverMessage {
+                    Text(leftoverMessage).font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
+                }
+            }
+        }
+    }
+
+    private func reloadLeftovers() {
+        guard !leftoverBusy else { return }
+        leftoverBusy = true
+        leftoverMessage = nil
+        DispatchQueue.global(qos: .utility).async {
+            let items = SystemLeftovers.scan()
+            DispatchQueue.main.async {
+                leftovers = items
+                leftoverBusy = false
+                if items.isEmpty { leftoverMessage = "没有检测到家目录之外的大块残留。" }
+            }
+        }
+    }
+
+    private func removeLeftover(_ item: SystemLeftover) {
+        leftoverBusy = true
+        leftoverMessage = nil
+        DispatchQueue.global(qos: .userInitiated).async {
+            var message: String
+            do {
+                try SystemLeftovers.remove(item)
+                message = "已移除 \(item.title)（约 \(item.size.bytesText)）。"
+                OperationsLog.write("LEFTOVER REMOVED \(item.path) bytes=\(item.size)")
+            } catch {
+                message = "未移除 \(item.title)：\(error.localizedDescription)"
+            }
+            let refreshed = SystemLeftovers.scan()
+            DispatchQueue.main.async {
+                leftovers = refreshed
+                leftoverBusy = false
+                leftoverMessage = message
+            }
+        }
     }
 
     private var confirmationText: String {

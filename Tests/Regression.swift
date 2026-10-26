@@ -587,6 +587,19 @@ struct Regression {
         check(grouped.count == Module.allCases.count && Set(grouped) == Set(Module.allCases),
               "every module appears in exactly one sidebar group")
 
+        // 家目录之外的系统残留：只报告体积，可移除项必须逐类标注权限要求
+        let leftovers = SystemLeftovers.locations(tempDirectory: "/var/folders/xx/abcdef/T/")
+        check(leftovers.contains { $0.id == "macOSInstallData" && $0.needsAdmin },
+              "system leftover list marks the macOS install staging as admin-only")
+        check(leftovers.contains { $0.id == "diagnostics" && !$0.isRemovable },
+              "system diagnostics are reported but never removed by the tool")
+        check(leftovers.first { $0.id == "updaterClones" }?.path == "/var/folders/xx/abcdef/X",
+              "updater clone probe resolves to the per-user X directory")
+        check(leftovers.filter(\.isRemovable).allSatisfy { $0.kind == .adminStaging || $0.kind == .userTempClone },
+              "only staging and updater clones are offered for removal")
+        check(leftovers.allSatisfy { $0.path.hasPrefix("/") },
+              "system leftover paths stay absolute so they can be shown verbatim")
+
         print("\(checks - failures)/\(checks) checks passed")
         if failures > 0 { exit(1) }
     }
