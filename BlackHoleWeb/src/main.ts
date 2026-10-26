@@ -1,5 +1,5 @@
 import { DropModel, ABSORB_SECONDS, REBOUND_SECONDS, type DropItem, type DropResult } from "./lib/dropModel";
-import { clamp01, reboundPose, spiralPose, type Point } from "./lib/geometry";
+import { clamp01, reboundPose, spiralPose, WIDGET_SIZE, type Point, type Size } from "./lib/geometry";
 import { RenderLoop } from "./lib/renderLoop";
 import { HoleRenderer, type PointerState } from "./renderer";
 
@@ -25,7 +25,26 @@ const failures = document.getElementById("failures")!;
 const native = window.webkit?.messageHandlers?.sweepHole;
 const model = new DropModel();
 const nodes = new Map<string, HTMLDivElement>();
-let pointer: PointerState = { x: 120, y: 120, strength: 0, dragging: false };
+// 与 black-hole.css 的 .file 尺寸一致：168pt 窗口里 34px 图标不再拥挤。
+const ICON = 34;
+
+// 画布尺寸来自真实窗口，原生侧调整悬浮窗大小时无需改前端。
+function widgetSize(): Size {
+  return { width: root.clientWidth || WIDGET_SIZE.width, height: root.clientHeight || WIDGET_SIZE.height };
+}
+function center(): Point {
+  const size = widgetSize();
+  return { x: size.width / 2, y: size.height / 2 };
+}
+// 接近度：18pt 以内满响应，84pt 外无响应（与 BlackHoleMetrics 同一比例）。
+function pointerStrength(point: Point): number {
+  const size = widgetSize();
+  const scale = Math.min(size.width, size.height) / WIDGET_SIZE.width;
+  const distance = Math.hypot(point.x - size.width / 2, point.y - size.height / 2);
+  return clamp01(1 - (distance - 18 * scale) / (66 * scale));
+}
+
+let pointer: PointerState = { x: WIDGET_SIZE.width / 2, y: WIDGET_SIZE.height / 2, strength: 0, dragging: false };
 let renderer: HoleRenderer | undefined;
 let loop: RenderLoop | undefined;
 let nativeActive = true;
@@ -42,7 +61,8 @@ function renderError(message: string): void {
   post({ type: "render-error", message });
 }
 function pointOrCenter(point: Point): Point {
-  return { x: Number.isFinite(point?.x) ? point.x : 120, y: Number.isFinite(point?.y) ? point.y : 120 };
+  const middle = center();
+  return { x: Number.isFinite(point?.x) ? point.x : middle.x, y: Number.isFinite(point?.y) ? point.y : middle.y };
 }
 function syncActive(): void {
   loop?.setActive(nativeActive && !document.hidden && !renderFailed);
@@ -70,10 +90,11 @@ function drawFiles(): void {
     }
     node.classList.toggle("failed", file.phase === "failed");
     node.title = file.phase === "failed" ? `${file.name}：${file.error}` : file.name;
-    const pose = file.phase === "absorbing" ? spiralPose(file.start, file.elapsed / ABSORB_SECONDS)
-      : file.phase === "failed" ? reboundPose(file.start, file.elapsed / REBOUND_SECONDS)
+    const size = widgetSize();
+    const pose = file.phase === "absorbing" ? spiralPose(file.start, file.elapsed / ABSORB_SECONDS, size)
+      : file.phase === "failed" ? reboundPose(file.start, file.elapsed / REBOUND_SECONDS, size)
       : { ...file.start, rotation: Math.sin(file.elapsed * 4) * 0.04, scaleX: 1, scaleY: 1, opacity: 1 };
-    node.style.transform = `translate(${pose.x - 20}px, ${pose.y - 20}px) rotate(${pose.rotation}rad) scale(${pose.scaleX}, ${pose.scaleY})`;
+    node.style.transform = `translate(${pose.x - ICON / 2}px, ${pose.y - ICON / 2}px) rotate(${pose.rotation}rad) scale(${pose.scaleX}, ${pose.scaleY})`;
     node.style.opacity = String(pose.opacity);
     const name = node.lastElementChild as HTMLDivElement;
     name.style.opacity = file.phase === "absorbing" ? String(Math.max(0, 1 - file.elapsed * 3)) : "1";
@@ -163,8 +184,8 @@ if (!native) {
   root.addEventListener("pointermove", event => {
     const bounds = root.getBoundingClientRect();
     const point = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
-    window.sweepHole.setPointer({ ...point, strength: clamp01(1 - Math.hypot(point.x - 120, point.y - 120) / 210), dragging: false });
+    window.sweepHole.setPointer({ ...point, strength: pointerStrength(point), dragging: false });
   });
-  root.addEventListener("pointerleave", () => window.sweepHole.setPointer({ x: 120, y: 120, strength: 0, dragging: false }));
+  root.addEventListener("pointerleave", () => window.sweepHole.setPointer({ ...center(), strength: 0, dragging: false }));
   drawFeedback();
 }

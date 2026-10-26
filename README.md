@@ -28,6 +28,13 @@ open Sweep.app
 
 要求：macOS 13+，Apple Command Line Tools（无需完整 Xcode）。
 
+## 0.6.1 桌面黑洞：更小、可穿透、自己的样子
+
+- 面板 240 → **168pt**，投递半径 112 → 62pt。指针在圈外（>74pt）时窗口 `ignoresMouseEvents`，四角空白直接穿透到桌面，不再抢点击；拖拽进行中强制恢复可接收，保证文件一定落得进来。
+- 视觉与上游 `charleypeng/kakabin` 的橙色吸积盘彻底分开：冷白→天青（#78AAFF）→深靛的冷色环、同心刻线盘面、双层光子环；去掉星空与星云，**圆外完全透明**，只在有光与视界的地方输出像素。
+- 待机收小、靠近张开（场缩放 1.20 → 0.88），粒子同尺度换算；移除会把画面压成小漩涡的光标凹陷。
+- 几何量集中在 `BlackHoleMetrics`，前端按真实窗口尺寸换算中心与半径。详见 `verification/black-hole-widget-0.6.1.md`。
+
 ## 0.6.0 macOS 玻璃界面
 
 参考 [macos27-claude](https://github.com/a2d2-dev/macos27-claude) 的 `glass.css`、窗口与 Finder 组件，将界面层次适配为原生 SwiftUI：

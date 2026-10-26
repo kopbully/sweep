@@ -1,6 +1,9 @@
 export interface Point { x: number; y: number }
 export interface Size { width: number; height: number }
-export const WIDGET_SIZE: Size = { width: 240, height: 240 };
+// 与 BlackHoleMetrics.side 一致：悬浮窗缩小后不再遮挡桌面。
+export const WIDGET_SIZE: Size = { width: 168, height: 168 };
+// 与 shaders/blackhole.ts 的 ZOOM_IDLE / ZOOM_ACTIVE 一致：>1 表示画面更小。
+export const HOLE_ZOOM = { idle: 1.20, active: 0.88 };
 export const clamp01 = (value: number): number => Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
 
 // AppKit supplies CSS points with a top-left origin, including points outside the view.
@@ -9,11 +12,18 @@ export function toNDC(point: Point, size = WIDGET_SIZE): Point {
 }
 
 export function pendingPosition(point: Point, index: number, visible: number, size = WIDGET_SIZE): Point {
-  if (index === 0) return { x: Math.max(24, Math.min(size.width - 24, point.x)), y: Math.max(28, Math.min(size.height - 48, point.y)) };
+  const marginX = 22;
+  const marginTop = 24;
+  const marginBottom = 40;
+  if (index === 0) return {
+    x: Math.max(marginX, Math.min(size.width - marginX, point.x)),
+    y: Math.max(marginTop, Math.min(size.height - marginBottom, point.y)),
+  };
   const angle = index / Math.max(visible, 2) * Math.PI * 2;
+  const radius = Math.min(size.width, size.height) * 0.26;
   return {
-    x: Math.max(24, Math.min(size.width - 24, point.x + Math.cos(angle) * 48)),
-    y: Math.max(28, Math.min(size.height - 48, point.y + Math.sin(angle) * 42)),
+    x: Math.max(marginX, Math.min(size.width - marginX, point.x + Math.cos(angle) * radius)),
+    y: Math.max(marginTop, Math.min(size.height - marginBottom, point.y + Math.sin(angle) * radius * 0.86)),
   };
 }
 

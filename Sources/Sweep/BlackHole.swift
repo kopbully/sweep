@@ -2,6 +2,29 @@ import AppKit
 import SwiftUI
 import WebKit
 
+/// Desktop widget geometry. The hole is deliberately small: it floats over the
+/// desktop, so every extra point of its 240pt predecessor stole clicks from
+/// whatever sat underneath it.
+enum BlackHoleMetrics {
+    static let side: CGFloat = 168
+    static let dropRadius: CGFloat = 62
+    /// Pointer response starts before the ring is reached, so the hole can grow
+    /// as the cursor approaches without waiting for a hit.
+    static let hoverInner: CGFloat = 18
+    static let hoverOuter: CGFloat = 84
+    /// Outside this radius the window stops accepting mouse events entirely and
+    /// clicks fall through to the desktop.
+    static let passThroughRadius: CGFloat = dropRadius + 12
+    static let cornerInset: CGFloat = 22
+    static let bottomInset: CGFloat = 84
+    static var center: NSPoint { NSPoint(x: side / 2, y: side / 2) }
+
+    static func strength(distance: CGFloat) -> CGFloat {
+        let span = hoverOuter - hoverInner
+        return max(0, min(1, 1 - (distance - hoverInner) / span))
+    }
+}
+
 @MainActor
 final class BlackHoleController: NSObject, ObservableObject, WKNavigationDelegate {
     static let shared = BlackHoleController()
@@ -16,6 +39,7 @@ final class BlackHoleController: NSObject, ObservableObject, WKNavigationDelegat
     private var rendererFailureMessage: String?
     private var localMonitor: Any?
     private var globalMonitor: Any?
+    private var proximityTimer: Timer?
     private var ready = false
     private var busy = false
     private var dragging = false
@@ -34,6 +58,7 @@ final class BlackHoleController: NSObject, ObservableObject, WKNavigationDelegat
         guard let panel else { return }
         isVisible = true
         UserDefaults.standard.set(true, forKey: Self.preferenceKey)
+        panel.ignoresMouseEvents = false
         panel.orderFrontRegardless()
         call("setActive", argument: true)
         installPointerMonitors()
@@ -43,6 +68,7 @@ final class BlackHoleController: NSObject, ObservableObject, WKNavigationDelegat
     @objc func hide() {
         call("setActive", argument: false)
         panel?.orderOut(nil)
+        panel?.ignoresMouseEvents = false
         isVisible = false
         near = false
         UserDefaults.standard.set(false, forKey: Self.preferenceKey)
@@ -50,6 +76,8 @@ final class BlackHoleController: NSObject, ObservableObject, WKNavigationDelegat
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
         localMonitor = nil
         globalMonitor = nil
+        proximityTimer?.invalidate()
+        proximityTimer = nil
     }
 
     func shutdown() {
@@ -71,7 +99,10 @@ final class BlackHoleController: NSObject, ObservableObject, WKNavigationDelegat
         }
         let screen = NSApp.mainWindow?.screen ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
-        let frame = NSRect(x: visible.maxX - 264, y: visible.minY + 88, width: 240, height: 240)
+        let side = BlackHoleMetrics.side
+        let frame = NSRect(x: visible.maxX - side - BlackHoleMetrics.cornerInset,
+                           y: visible.minY + BlackHoleMetrics.bottomInset,
+                           width: side, height: side)
         let panel = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel],
                             backing: .buffered, defer: false)
         panel.title = "Sweep 桌面黑洞"
@@ -104,6 +135,7 @@ final class BlackHoleController: NSObject, ObservableObject, WKNavigationDelegat
         self.webView = webView
         self.bridge = bridge
         self.rendererPage = page
+        OperationsLog.write("BLACKHOLE PANEL frame=\(Int(frame.origin.x)),\(Int(frame.origin.y)) side=\(Int(side)) visible=\(Int(visible.origin.y))+\(Int(visible.height))")
         reloadRenderer()
     }
 
@@ -142,6 +174,14 @@ final class BlackHoleController: NSObject, ObservableObject, WKNavigationDelegat
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
             self?.updatePointer()
         }
+        // While the window is click-through it receives no local events, so a
+        // cheap 12 Hz poll decides when the cursor is back inside the ring.
+        guard proximityTimer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 12.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.updatePointer(force: true) }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        proximityTimer = timer
     }
 
     private func updatePointer(force: Bool = false) {
@@ -151,14 +191,27 @@ final class BlackHoleController: NSObject, ObservableObject, WKNavigationDelegat
         lastPointerUpdate = now
         let cursor = NSEvent.mouseLocation
         let point = NSPoint(x: cursor.x - panel.frame.minX, y: panel.frame.maxY - cursor.y)
+        let center = NSPoint(x: panel.frame.width / 2, y: panel.frame.height / 2)
+        updateHitRegion(distance: hypot(point.x - center.x, point.y - center.y), panel: panel)
         sendPointer(point, dragging: dragging)
+    }
+
+    /// Corners of the panel are empty pixels: let them reach the desktop instead
+    /// of swallowing the click. Native drag/drop and drag-to-move stay available
+    /// because both happen inside the ring.
+    private func updateHitRegion(distance: CGFloat, panel: NSPanel) {
+        let ignoring = !dragging && distance > BlackHoleMetrics.passThroughRadius
+        if panel.ignoresMouseEvents != ignoring {
+            panel.ignoresMouseEvents = ignoring
+            OperationsLog.write("BLACKHOLE HIT_REGION passThrough=\(ignoring) distance=\(Int(distance))")
+        }
     }
 
     private func sendPointer(_ point: NSPoint, dragging: Bool) {
         guard let panel else { return }
         let center = NSPoint(x: panel.frame.width / 2, y: panel.frame.height / 2)
         let distance = hypot(point.x - center.x, point.y - center.y)
-        let strength = max(0, min(1, 1 - (distance - 30) / 210))
+        let strength = BlackHoleMetrics.strength(distance: distance)
         let isNear = strength > 0
         let wasNear = near
         if near != isNear {
@@ -167,7 +220,7 @@ final class BlackHoleController: NSObject, ObservableObject, WKNavigationDelegat
         }
         // No IPC while the cursor remains far away; AppKit coordinates are logical points on every display.
         if !isNear && !dragging {
-            if wasNear { call("setPointer", argument: ["x": 120, "y": 120, "strength": 0, "dragging": false]) }
+            if wasNear { call("setPointer", argument: ["x": center.x, "y": center.y, "strength": 0, "dragging": false]) }
             return
         }
         call("setPointer", argument: ["x": point.x, "y": point.y, "strength": strength, "dragging": dragging])
@@ -175,6 +228,9 @@ final class BlackHoleController: NSObject, ObservableObject, WKNavigationDelegat
 
     func dragHover(at point: NSPoint, active: Bool) {
         dragging = active
+        // A drag already in flight must be able to land even if it entered from
+        // a corner that was click-through a moment ago.
+        if active { panel?.ignoresMouseEvents = false }
         sendPointer(point, dragging: active)
     }
 
@@ -315,7 +371,7 @@ private final class BlackHoleDropView: NSView {
         let point = point(sender)
         return controller?.canAcceptDrop == true && !urls(sender).isEmpty
             && !BlackHoleController.trashDragOperation(for: sender.draggingSourceOperationMask).isEmpty
-            && hypot(point.x - bounds.midX, point.y - bounds.midY) <= 112
+            && hypot(point.x - bounds.midX, point.y - bounds.midY) <= BlackHoleMetrics.dropRadius
     }
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         let point = point(sender)
@@ -328,7 +384,7 @@ private final class BlackHoleDropView: NSView {
         return valid ? BlackHoleController.trashDragOperation(for: sender.draggingSourceOperationMask) : []
     }
     override func draggingExited(_ sender: NSDraggingInfo?) {
-        controller?.dragHover(at: NSPoint(x: 120, y: 120), active: false)
+        controller?.dragHover(at: BlackHoleMetrics.center, active: false)
     }
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let valid = accepted(sender)

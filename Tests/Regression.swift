@@ -26,6 +26,22 @@ struct Regression {
               "Trash rejects operations that ask the source to remove its data")
         check(BlackHoleController.trashDragOperation(for: [.copy, .link]).isEmpty,
               "Trash rejects a source that only permits copying or linking")
+        check(BlackHoleMetrics.side <= 176, "desktop hole stays small enough to work around")
+        check(BlackHoleMetrics.dropRadius * 2 < BlackHoleMetrics.side,
+              "drop ring fits inside the panel instead of touching its edge")
+        check(BlackHoleMetrics.passThroughRadius > BlackHoleMetrics.dropRadius,
+              "the ring is clickable while the empty corners fall through")
+        check(BlackHoleMetrics.passThroughRadius < BlackHoleMetrics.side / 2,
+              "pass-through radius never claims the whole panel")
+        check(BlackHoleMetrics.center == NSPoint(x: BlackHoleMetrics.side / 2, y: BlackHoleMetrics.side / 2),
+              "pointer center matches the panel midpoint")
+        check(BlackHoleMetrics.strength(distance: 0) == 1, "full response at the center")
+        check(BlackHoleMetrics.strength(distance: BlackHoleMetrics.dropRadius) > 0,
+              "the whole drop ring responds to the pointer")
+        check(BlackHoleMetrics.strength(distance: BlackHoleMetrics.hoverOuter) == 0,
+              "no response at the hover radius")
+        check(BlackHoleMetrics.strength(distance: BlackHoleMetrics.hoverOuter + 40) == 0,
+              "response is clamped outside the hover radius")
         let fm = FileManager.default
         let root = fm.temporaryDirectory.appendingPathComponent("sweep-regression-\(UUID().uuidString)")
         try fm.createDirectory(at: root, withIntermediateDirectories: true)

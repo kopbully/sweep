@@ -1,27 +1,43 @@
 import { describe, expect, it } from "vitest";
-import { pendingPosition, reboundPose, spiralPose, toNDC } from "../src/lib/geometry";
+import { HOLE_ZOOM, pendingPosition, reboundPose, spiralPose, toNDC, WIDGET_SIZE } from "../src/lib/geometry";
 import { ABSORB_SECONDS, DropModel, MAX_VISIBLE_FILES, REBOUND_SECONDS } from "../src/lib/dropModel";
 import { RenderLoop, type AnimationDriver } from "../src/lib/renderLoop";
 import { HORIZON_R, orbitStep, spawnParticle } from "../src/lib/orbit";
+import { BLACK_HOLE_FRAG } from "../src/shaders/blackhole";
 
 describe("native CSS geometry", () => {
+  it("keeps the widget small enough to sit over the desktop", () => {
+    expect(WIDGET_SIZE).toEqual({ width: 168, height: 168 });
+  });
   it("converts top-left CSS points and retains outside coordinates", () => {
     expect(toNDC({ x: 0, y: 0 })).toEqual({ x: -1, y: 1 });
-    expect(toNDC({ x: 120, y: 120 })).toEqual({ x: 0, y: 0 });
-    expect(toNDC({ x: 300, y: -60 })).toEqual({ x: 1.5, y: 1.5 });
+    expect(toNDC({ x: 84, y: 84 })).toEqual({ x: 0, y: 0 });
+    expect(toNDC({ x: 300, y: -60 }).x).toBeCloseTo(2.5714, 3);
+    expect(toNDC({ x: 300, y: -60 }).y).toBeCloseTo(1.7143, 3);
   });
   it("starts at the actual drop and shrinks along a rotating path into the center", () => {
-    const point = { x: 182, y: 65 };
+    const point = { x: 140, y: 46 };
     expect(pendingPosition(point, 0, 2)).toEqual(point);
     expect(spiralPose(point, 0)).toMatchObject(point);
     const mid = spiralPose(point, 0.5);
     const end = spiralPose(point, 1);
     expect(mid.rotation).toBeGreaterThan(Math.PI);
     expect(mid.scaleX).toBeGreaterThan(mid.scaleY);
-    expect(Math.hypot(mid.x - 120, mid.y - 120)).toBeLessThan(Math.hypot(62, -55));
-    expect(end).toMatchObject({ x: 120, y: 120, scaleX: 0, scaleY: 0, opacity: 0 });
-    expect(spiralPose({ x: 120, y: 120 }, 0.001)).toMatchObject({ x: 120, y: 120 });
+    expect(Math.hypot(mid.x - 84, mid.y - 84)).toBeLessThan(Math.hypot(56, -38));
+    expect(end).toMatchObject({ x: 84, y: 84, scaleX: 0, scaleY: 0, opacity: 0 });
+    expect(spiralPose({ x: 84, y: 84 }, 0.001)).toMatchObject({ x: 84, y: 84 });
     expect(reboundPose(point, 1)).toMatchObject({ ...point, scaleX: 1, scaleY: 1, opacity: 1 });
+  });
+  it("keeps the shader zoom and the particle zoom on the same numbers", () => {
+    const zoom = (name: string): number => Number(new RegExp(`#define ${name} ([0-9.]+)`).exec(BLACK_HOLE_FRAG)?.[1]);
+    expect(zoom("ZOOM_IDLE")).toBe(HOLE_ZOOM.idle);
+    expect(zoom("ZOOM_ACTIVE")).toBe(HOLE_ZOOM.active);
+    expect(HOLE_ZOOM.idle).toBeGreaterThan(HOLE_ZOOM.active);
+  });
+  it("never draws an opaque backdrop behind the hole", () => {
+    // 上游渲染的是整块星空；Sweep 只在有光和视界的地方输出不透明像素。
+    expect(BLACK_HOLE_FRAG).not.toContain("stars(");
+    expect(BLACK_HOLE_FRAG).toContain("gl_FragColor = vec4(col, alpha);");
   });
 });
 
