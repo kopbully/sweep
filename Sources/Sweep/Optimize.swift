@@ -232,6 +232,7 @@ final class OptimizeRunner: ObservableObject {
                 DispatchQueue.main.async {
                     self?.results[task.id] = msg
                     self?.runningTask = nil
+                    OperationHistory.record(kind: .optimize, summary: "\(task.title)：\(msg)")
                 }
             }
         }
@@ -253,6 +254,7 @@ final class OptimizeRunner: ObservableObject {
             OptimizeCatalog.execute(task: task) { [weak self] msg, _ in
                 DispatchQueue.main.async {
                     self?.results[task.id] = msg
+                    OperationHistory.record(kind: .optimize, summary: "\(task.title)：\(msg)")
                 }
                 self?.executeChain(tasks, index: index + 1, last: last)
             }

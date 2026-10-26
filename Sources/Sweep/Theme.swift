@@ -1,46 +1,5 @@
 import SwiftUI
 
-enum Theme {
-    static let bg = Color(hex: "#101216")
-    static let card = Color(hex: "#181B21")
-    static let cardBorder = Color(hex: "#262B33")
-    static let textPrimary = Color(hex: "#E9ECF1")
-    static let textSecondary = Color(hex: "#8B93A1")
-    static let accent = Color(hex: "#3ECF8E")
-    static let accentWarn = Color(hex: "#E8A33D")
-    static let accentDanger = Color(hex: "#E25B5B")
-
-    static func healthColor(_ score: Double) -> Color {
-        if score >= 80 { return accent }
-        if score >= 50 { return accentWarn }
-        return accentDanger
-    }
-
-    static func usageColor(_ percent: Double) -> Color {
-        if percent >= 90 { return accentDanger }
-        if percent >= 80 { return accentWarn }
-        return accent
-    }
-}
-
-extension Color {
-    init(hex: String) {
-        var h = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-        if h.hasPrefix("#") { h.removeFirst() }
-        var v: UInt64 = 0
-        Scanner(string: h).scanHexInt64(&v)
-        let r, g, b: Double
-        if h.count == 6 {
-            r = Double((v >> 16) & 0xFF) / 255
-            g = Double((v >> 8) & 0xFF) / 255
-            b = Double(v & 0xFF) / 255
-        } else {
-            r = 0.5; g = 0.5; b = 0.5
-        }
-        self = Color(red: r, green: g, blue: b)
-    }
-}
-
 /// 迷你趋势图（sparkline）
 struct Sparkline: View {
     let data: [Double]
@@ -82,10 +41,11 @@ struct GaugeRing: View {
     let value: Double          // 0...1
     let color: Color
     let lineWidth: CGFloat = 6
+
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Theme.cardBorder, lineWidth: lineWidth)
+                .stroke(Theme.surfaceHover, lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: min(max(value, 0.001), 1))
                 .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
@@ -94,26 +54,23 @@ struct GaugeRing: View {
     }
 }
 
+/// 兼容旧调用点的卡片容器，样式交给设计系统
 struct Card<Content: View>: View {
     let content: Content
+
     init(@ViewBuilder content: () -> Content) { self.content = content() }
+
     var body: some View {
-        content
-            .padding(14)
-            .background(Theme.card)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Theme.cardBorder, lineWidth: 1))
+        Panel(padding: Space.s200) { content }
     }
 }
 
+/// 兼容旧调用点的标题，样式交给设计系统
 struct SectionTitle: View {
     let title: String
     let subtitle: String
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.textPrimary)
-            Text(subtitle).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
-        }
+        PageHeader(title, subtitle: subtitle)
     }
 }

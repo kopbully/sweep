@@ -1,14 +1,19 @@
 # Sweep — 安静的 macOS 空间管家
 
-参考 [Nivo](https://app.nivoclean.com)（Mole CLI 的商业壳）的产品思路，用 **Swift + SwiftUI** 做的一个本地原生桌面应用。五个模块对应 Nivo 的五颗行星：
+参考 [Nivo](https://app.nivoclean.com)（Mole CLI 的商业壳）的产品思路，用 **Swift + SwiftUI** 做的一个本地原生桌面应用。十个模块分三组：
 
 | 模块 | 功能 |
 |------|------|
-| **清理 Clean** | 扫描浏览器与应用缓存、Xcode DerivedData/模拟器缓存、npm/pip/uv/Homebrew/Gradle 缓存。默认不勾选；少量明确缓存可加入推荐选择，其他应用缓存逐项复核后才可清理。 |
-| **卸载 Uninstall** | 读取 /Applications（含家目录），展示应用体积/版本/最后修改时间；卸载时本体进废纸篓（可恢复），并按 Bundle ID + 名称搜索 `~/Library` 下 7 类残留一并清理 |
-| **优化 Optimize** | 6 个维护任务：DNS 刷新、Quick Look 缩略图清理、旧日志修剪、清空废纸篓、下载目录安装包清理、系统日志修剪。免密任务可一键顺序执行；管理员任务通过系统授权框 |
-| **分析 Analyze** | 任意目录逐层钻取的空间排行：条目按大小排序，带占比条，可"进入 / 移入废纸篓 / 在 Finder 中显示" |
-| **监控 Status** | 一秒采样：CPU、内存、磁盘、上下行流量、电池/电源、负载、开机时长，每项带 60 秒 sparkline；健康分（0-100）；进程列表（ps 轮询）支持排序与置顶钉选 |
+| **清理 Clean** | 扫描浏览器与应用缓存、Xcode DerivedData/模拟器缓存、npm/pip/uv/Homebrew/Gradle 等 25 类可重建缓存。默认不勾选；少量明确缓存可加入推荐选择，其他应用缓存逐项复核后才可清理。 |
+| **大文件 Large files** | 按 100 MB / 500 MB / 1 GB / 5 GB 门槛找出单个文件，边扫边出结果，可批量移入废纸篓。隐藏目录与缓存树不在范围内。 |
+| **重复文件 Duplicates** | 大小分桶 → 首尾 64 KB 摘要 → 全文件 SHA256 三段校验，只有逐字节一致才归组；默认保留修改时间最早的一份。 |
+| **磁盘分析 Analyze** | 列表 / 矩形树图 / 旭日图三种视图看空间去向，逐层钻取，右键可移入废纸篓。 |
+| **监控 Status** | 一秒采样：CPU、内存、磁盘、上下行流量、电池/电源、负载、开机时长，每项带 60 秒 sparkline；健康分与进程列表。 |
+| **优化 Optimize** | 6 个维护任务：DNS 刷新、Quick Look 缩略图清理、旧日志修剪、清空废纸篓、下载目录安装包清理、系统日志修剪。 |
+| **启动项 Startup** | 扫描三个 LaunchAgents/LaunchDaemons 目录，用户级可停用与恢复，系统级只读。 |
+| **内存 Memory** | 应用/联动/压缩/交换内存构成、压力等级、进程占用排行；「整理可回收内存」调用系统 purge（需管理员密码）。 |
+| **隐私清理 Privacy** | 浏览器缓存、历史、Cookie，以及最近使用、崩溃报告、Shell 历史、剪贴板；按「安全 / 丢记录 / 会退出登录」分级。 |
+| **操作历史 History** | 每次删除与系统改动写入结构化 `history.jsonl`，界面同时解析旧版日志，按天分组、按类型筛选、可导出 CSV。 |
 
 ## 构建与运行
 
@@ -22,6 +27,29 @@ open Sweep.app
 ```
 
 要求：macOS 13+，Apple Command Line Tools（无需完整 Xcode）。
+
+## 0.5.0 界面重构 · 六个新模块
+
+### 视觉系统
+
+界面按 [ai-design-skills](https://github.com/elayadesign/ai-design-skills)（MIT）的 `landing-page-design` 视觉系统重做，落在 `DesignSystem.swift`：
+
+- **底板只取五档**：`#000000` 窗口、`#181818` 面板、`#1F1F1F` 次级面、`#272727` 悬停、`#313131` 描边。背景一律平涂，不做渐变。
+- **渐变只用于标题文字**：白 → `#9B9B9B`，侧边栏品牌名与每个页头标题都用它。
+- **字号阶梯** 12 / 14 / 16 / 18 / 20 / 24 / 30；**间距令牌** 2 / 4 / 8 / 12 / 16 / 24 / 32；**圆角** 6 / 8 / 12 / 16，嵌套时按 `inner = outer − gap` 收窄。
+- **动效**统一 `cubic-bezier(0.22, 1, 0.36, 1)`，只作用于透明度与缩放，并尊重「减弱动态效果」。
+- **状态齐全**：每个交互都有悬停、按下 `scale(0.98)`、禁用、加载骨架与空状态；空状态是带下一步动作的完整版面，不是空白面板。
+- 刻意偏离的两处：图标用 SF Symbols 而不是 Phosphor/Solar（原生应用不引 Web 图标库）；滚动显隐改用 SwiftUI 原生动画，不搬 `IntersectionObserver` 那一套。
+
+### 新增能力
+
+- **大文件**：`LargeFileScanner` 只走普通文件，跳过 `.app`/`.photoslibrary` 等包内部，每 2000 个文件回传一次部分结果，扫描过程就能看到列表；取消立即生效。
+- **重复文件**：默认不自动扫描（整文件校验开销大），需手动开始。`DuplicateGroup.keeper` 取最早修改的一份，`wasted` 按「份数 − 1」计。
+- **矩形树图**：`TreemapLayout.squarify` 实现 squarified treemap，最多画 24 块 + 其余合并；面积严格正比于体积，测试校验了填充率与比例。
+- **旭日图**：按钻取路径逐层成环，悬停时中心显示该分段名称、体积与占比，右侧图例与扇区共用同一套明度阶梯。
+- **内存**：`host_statistics64` 读应用/联动/压缩内存，`sysctlbyname(vm.swapusage)` 读交换，`kern.memorystatus_vm_pressure_level` 读压力；进程排行来自 `ps`，退出走 `NSRunningApplication.terminate()`。
+- **隐私清理**：`Remover.remove(..., extraAllow:)` 只放行条目自己声明的路径，全局白名单不放宽；测试覆盖了「清单内可删 / 清单外仍被拒」。
+- **操作历史**：`history.jsonl` 是权威来源，旧 `operations.log` 只保留早于第一条结构化记录的部分，避免同一操作被计两次；测试产生的记录写到临时目录，不污染用户历史。
 
 ## 0.4.0 启动项 · 规则扩容 · 删除闸门修复
 

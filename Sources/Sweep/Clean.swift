@@ -215,6 +215,7 @@ final class CleanEngine: ObservableObject {
             let removed = Set(report.outcomes.filter { $0.status == .removed }.map(\.path))
             self.items.removeAll { removed.contains($0.path) }
             OperationsLog.write("CLEAN RESULT removed=\(report.successfulCount) incomplete=\(report.outcomes.count - report.successfulCount) logicalBytes=\(report.removedBytes) cancelled=\(report.cancelled)")
+            OperationHistory.record(kind: .clean, summary: "缓存清理：成功 \(report.successfulCount) 项，未完成 \(report.outcomes.count - report.successfulCount) 项", bytes: report.removedBytes, count: report.successfulCount)
             // Refresh candidates without replacing the completed operation report.
             self.scan()
         }
@@ -312,21 +313,18 @@ struct CleanView: View {
                 HStack(alignment: .center, spacing: 20) {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("所选逻辑大小").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
-                        Text(engine.selectedTotal.bytesText)
-                            .font(.system(size: 28, weight: .heavy, design: .rounded)).foregroundStyle(Theme.accent)
+                        Text(engine.selectedTotal.sizeText)
+                            .font(Typo.mono(Typo.xxl, .semibold)).foregroundStyle(Theme.accent)
                         Text("\(engine.selectedItems.count) 项已选 · 占用估算 \(engine.selectedAllocated.bytesText)")
                             .font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
                     }
                     Spacer()
-                    Button { engine.scan() } label: { Label("重新扫描", systemImage: "arrow.clockwise") }
-                        .buttonStyle(.bordered).disabled(engine.busy)
-                    Button {
+                    SweepButton(.secondary, title: "重新扫描", systemImage: "arrow.clockwise") { engine.scan() }
+                        .disabled(engine.busy)
+                    SweepButton(.primary, title: "清理所选", systemImage: "wind.snow") {
                         confirmationItems = engine.selectedItems
                         confirmClean = true
-                    } label: {
-                        Label("清理所选", systemImage: "wind.snow").font(.system(size: 13, weight: .semibold))
                     }
-                    .buttonStyle(.borderedProminent).tint(Theme.accent).foregroundStyle(.black)
                     .disabled(engine.selectedItems.isEmpty || engine.busy)
                 }
                 Text("跨候选共享硬链接可能重复计入合计；APFS 克隆与快照也会影响实际释放空间。")
@@ -342,8 +340,8 @@ struct CleanView: View {
                     TextField("按名称或路径筛选", text: $search)
                         .textFieldStyle(.roundedBorder).frame(maxWidth: 320)
                     Spacer()
-                    Button("选择推荐项") { engine.selectRecommended() }.disabled(engine.busy)
-                    Button("全不选") { engine.deselectAll() }.disabled(engine.busy)
+                    SweepButton(.quiet, title: "选择推荐项") { engine.selectRecommended() }.disabled(engine.busy)
+                    SweepButton(.quiet, title: "全不选") { engine.deselectAll() }.disabled(engine.busy)
                 }
                 Text(search.isEmpty ? "默认不勾选；正在运行的应用缓存或扫描不完整的项目会保留。" : "清理使用全部已勾选项，包含筛选结果之外的选择。")
                     .font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
@@ -416,14 +414,14 @@ struct CleanView: View {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 8) {
                     Text(name).font(.system(size: 14, weight: .semibold))
-                    Text("\(items.count) 项 · \(items.reduce(Int64(0)) { $0 + $1.size }.bytesText)")
+                    Text("\(items.count) 项 · \(items.reduce(Int64(0)) { $0 + $1.size }.sizeText)")
                         .font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
                     Spacer()
                     let eligible = items.filter(\.canSelect)
                     let allSelected = !eligible.isEmpty && eligible.allSatisfy(\.selected)
-                    Button(allSelected ? "取消此组" : "选择此组") {
+                    SweepButton(.quiet, title: allSelected ? "取消此组" : "选择此组") {
                         for item in eligible { engine.setSelected(item.id, !allSelected) }
-                    }.font(.system(size: 11)).disabled(engine.busy || eligible.isEmpty)
+                    }.disabled(engine.busy || eligible.isEmpty)
                 }
                 LazyVStack(spacing: 4) { ForEach(items) { item in itemRow(item) } }
             }
@@ -441,24 +439,25 @@ struct CleanView: View {
                 .font(.system(size: 11)).foregroundStyle(Theme.textSecondary).padding(.top, 3)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(item.name).font(.system(size: 12)).lineLimit(1)
-                    if item.recommended && item.canSelect { Text("推荐").font(.system(size: 9)).foregroundStyle(Theme.accent) }
+                    Text(item.name).font(Typo.f(Typo.sm, .medium)).foregroundStyle(Theme.textPrimary).lineLimit(1)
+                    if item.recommended && item.canSelect { Tag(text: "推荐", tone: .accent) }
                 }
-                Text(shortPath(item.path)).font(.system(size: 9)).foregroundStyle(Theme.textSecondary)
+                Text(shortPath(item.path)).font(Typo.mono(Typo.xs)).foregroundStyle(Theme.textMuted)
                     .lineLimit(1).truncationMode(.middle)
                 if let reason = item.reason {
-                    Text(reason).font(.system(size: 10)).foregroundStyle(Theme.accentWarn).fixedSize(horizontal: false, vertical: true)
+                    Text(reason).font(Typo.f(Typo.xs)).foregroundStyle(Theme.accentWarn).fixedSize(horizontal: false, vertical: true)
                 }
                 if item.hasExternalHardLinks {
-                    Text("包含共享硬链接，移除后释放量可能较少").font(.system(size: 9)).foregroundStyle(Theme.textSecondary)
+                    Text("包含共享硬链接，移除后释放量可能较少").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
                 }
             }
             Spacer(minLength: 8)
-            Button("打开") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)]) }
-                .buttonStyle(.link).font(.system(size: 10))
+            SweepButton(.quiet, title: "显示") {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: item.path)])
+            }
             VStack(alignment: .trailing, spacing: 3) {
-                Text(item.size.bytesText).font(.system(size: 11, weight: .medium).monospacedDigit())
-                Text("占用 \(item.allocatedSize.bytesText)").font(.system(size: 9)).foregroundStyle(Theme.textSecondary)
+                Text(item.size.sizeText).font(Typo.mono(Typo.sm, .medium))
+                Text("占用 \(item.allocatedSize.sizeText)").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
             }.frame(width: 92, alignment: .trailing)
         }
         .padding(.vertical, 5)

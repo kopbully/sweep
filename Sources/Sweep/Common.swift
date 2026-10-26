@@ -5,7 +5,13 @@ import AppKit
 
 extension Int64 {
     var bytesText: String {
-        ByteCountFormatter.string(fromByteCount: self, countStyle: .file)
+        if self < 1024 && self >= 0 { return "\(self) B" }
+        return ByteCountFormatter.string(fromByteCount: self, countStyle: .file)
+    }
+
+    /// 0 字节时显示占位符，避免出现 "Zero KB" 这种不自然的读数
+    var sizeText: String {
+        self <= 0 ? "—" : bytesText
     }
 }
 
@@ -96,13 +102,18 @@ enum Remover {
     }
 
     /// 返回是否有失败项。调用方负责先确认。
+    /// extraAllow 用于隐私清理等场景：只放行调用方自己声明的具体路径，
+    /// 不影响全局白名单，也不会绕过 exact 级保护（如 ~/Library 本身）。
     @discardableResult
-    static func remove(_ paths: [String], mode: Mode) -> (removed: Int, failed: Int) {
+    static func remove(_ paths: [String], mode: Mode, extraAllow: [String] = []) -> (removed: Int, failed: Int) {
         var removed = 0
         var failed = 0
+        let allow = extraAllow.map { ($0 as NSString).standardizingPath }
         for path in paths {
             let std = (path as NSString).standardizingPath
-            let allowed = (mode == .permanent) ? PathSafety.canDelete(std) : PathSafety.canTrash(std)
+            let explicitlyAllowed = allow.contains { std == $0 || std.hasPrefix($0 + "/") }
+            let base = (mode == .permanent) ? PathSafety.canDelete(std) : PathSafety.canTrash(std)
+            let allowed = (base || explicitlyAllowed) && !PathSafety.isProtected(std)
             guard allowed else {
                 OperationsLog.write("SKIP(protected) \(path)")
                 failed += 1
@@ -186,8 +197,17 @@ enum Sizer {
 
 // MARK: - 操作日志
 
+/// 运行期路径：测试可以改写到临时目录，避免污染真实日志与历史
+enum RuntimePaths {
+    nonisolated(unsafe) static var logDirectoryOverride: String?
+
+    static var logDirectory: String {
+        logDirectoryOverride ?? NSHomeDirectory() + "/Library/Logs/Sweep"
+    }
+}
+
 enum OperationsLog {
-    private static let dir = NSHomeDirectory() + "/Library/Logs/Sweep"
+    private static var dir: String { RuntimePaths.logDirectory }
     static var logPath: String { dir + "/operations.log" }
 
     static func write(_ line: String) {
@@ -205,7 +225,8 @@ extension String {
             _ = try? fh.seekToEnd()
             try fh.write(contentsOf: data(using: .utf8) ?? Data())
         } else {
-            try (self + "\n").write(to: url, atomically: true, encoding: .utf8)
+            let body = hasSuffix("\n") ? self : self + "\n"
+            try body.write(to: url, atomically: true, encoding: .utf8)
         }
     }
 }

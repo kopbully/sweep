@@ -245,107 +245,89 @@ struct StartupView: View {
     @StateObject private var engine = StartupEngine()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top) {
-                SectionTitle(title: "启动项", subtitle: "登录或开机时自动运行的后台程序；用户级可停用，系统级仅展示")
-                Spacer()
-                Button {
+        VStack(alignment: .leading, spacing: Space.s300) {
+            PageHeader("启动项", subtitle: "登录或开机时自动运行的后台程序。用户级可以停用并恢复，系统级只做展示。") {
+                SweepButton(.secondary, title: engine.scanning ? "扫描中" : "重新扫描", systemImage: "arrow.clockwise") {
                     engine.scan()
-                } label: {
-                    Label(engine.scanning ? "扫描中…" : "重新扫描", systemImage: "arrow.clockwise")
-                        .font(.system(size: 12, weight: .medium))
                 }
-                .buttonStyle(.bordered)
                 .disabled(engine.scanning)
             }
 
-            Text(engine.message)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textSecondary)
+            if !engine.message.isEmpty {
+                Text(engine.message)
+                    .font(Typo.f(Typo.xs))
+                    .foregroundStyle(Theme.textSecondary)
+            }
 
-            if engine.items.isEmpty && !engine.scanning {
-                Card {
-                    Text("未发现自启项，或该目录需要完全磁盘访问权限")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(engine.items) { item in
-                            row(item)
+            Panel(padding: Space.s75) {
+                if engine.items.isEmpty && !engine.scanning {
+                    EmptyState(icon: "power",
+                               title: "没有发现自启项",
+                               message: "也可能这些目录需要完全磁盘访问权限才能读取。")
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(engine.items.enumerated()), id: \.element.id) { index, item in
+                                row(item)
+                                if index < engine.items.count - 1 {
+                                    Rectangle().fill(Theme.border).frame(height: 1).padding(.leading, 32)
+                                }
+                            }
                         }
                     }
-                    .padding(.bottom, 8)
+                    .frame(maxHeight: .infinity)
                 }
             }
         }
-        .padding(18)
+        .padding(Space.s300)
+        .pageSurface()
         .onAppear { if engine.items.isEmpty { engine.scan() } }
     }
 
     private func row(_ item: LaunchItem) -> some View {
-        Card {
-            HStack(alignment: .top, spacing: 12) {
-                Circle()
-                    .fill(item.isEnabled ? Theme.accent : Theme.textSecondary.opacity(0.4))
-                    .frame(width: 8, height: 8)
-                    .padding(.top, 6)
+        HStack(alignment: .top, spacing: Space.s100) {
+            Circle()
+                .fill(item.isEnabled ? Theme.accent : Theme.textMuted)
+                .frame(width: 8, height: 8)
+                .padding(.top, 6)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(item.label)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.textPrimary)
-                        Text(item.scope.title)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(item.manageable ? Theme.accent : Theme.accentWarn)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background((item.manageable ? Theme.accent : Theme.accentWarn).opacity(0.12))
-                            .clipShape(Capsule())
-                        if item.runAtLoad {
-                            Text("RunAtLoad")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Theme.textSecondary)
-                        }
-                        if item.restoredFromDisabledStore {
-                            Text("已停用")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(Theme.accentWarn)
-                        }
+            VStack(alignment: .leading, spacing: Space.s25) {
+                HStack(spacing: Space.s75) {
+                    Text(item.label)
+                        .font(Typo.f(Typo.sm, .medium))
+                        .foregroundStyle(Theme.textPrimary)
+                    Tag(text: item.scope.title, tone: item.manageable ? .accent : .warn)
+                    if item.runAtLoad {
+                        Tag(text: "RunAtLoad")
                     }
-                    Text(item.program)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(Theme.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-
-                Spacer(minLength: 8)
-
-                if item.manageable {
-                    Button(item.restoredFromDisabledStore ? "启用" : "停用") {
-                        engine.setEnabled(item, enabled: item.restoredFromDisabledStore)
+                    if item.restoredFromDisabledStore {
+                        Tag(text: "已停用", tone: .warn)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(engine.busyLabel != nil)
-                } else {
-                    Text("需管理员")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.textSecondary)
                 }
+                Text(item.program)
+                    .font(Typo.mono(Typo.xs))
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
 
-                Button {
-                    engine.revealInFinder(item)
-                } label: {
-                    Image(systemName: "folder")
+            Spacer(minLength: Space.s100)
+
+            if item.manageable {
+                SweepButton(.secondary, title: item.restoredFromDisabledStore ? "启用" : "停用") {
+                    engine.setEnabled(item, enabled: item.restoredFromDisabledStore)
                 }
-                .buttonStyle(.borderless)
-                .help("在 Finder 中显示")
+                .disabled(engine.busyLabel != nil)
+            } else {
+                Tag(text: "需管理员")
+            }
+
+            SweepButton(.quiet, title: "显示") {
+                engine.revealInFinder(item)
             }
         }
+        .padding(.horizontal, Space.s100)
+        .padding(.vertical, Space.s75)
+        .rowBackground()
     }
 }

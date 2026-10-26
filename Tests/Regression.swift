@@ -30,6 +30,10 @@ struct Regression {
         let root = fm.temporaryDirectory.appendingPathComponent("sweep-regression-\(UUID().uuidString)")
         try fm.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? fm.removeItem(at: root) }
+        // 测试产生的清理记录写到临时目录，不能污染用户的操作历史
+        let logDir = root.appendingPathComponent("logs").path
+        try? fm.createDirectory(atPath: logDir, withIntermediateDirectories: true)
+        RuntimePaths.logDirectoryOverride = logDir
 
         let lockPath = root.appendingPathComponent("instance.lock").path
         let primary = SingleInstanceLock(path: lockPath)
@@ -438,6 +442,114 @@ struct Regression {
         } else {
             print("SKIP real Trash integration; use SWEEP_TEST_REAL_TRASH=1 for owned fixtures")
         }
+
+        // MARK: 矩形树图
+        let tiles = TreemapLayout.squarify(weights: [6, 3, 1], in: CGRect(x: 0, y: 0, width: 100, height: 100))
+        check(tiles.count == 3, "treemap returns one rect per weight")
+        check(tiles.allSatisfy { $0.width > 0 && $0.height > 0 }, "every treemap tile has a positive area")
+        check(tiles.allSatisfy { $0.minX >= -0.01 && $0.minY >= -0.01 && $0.maxX <= 100.01 && $0.maxY <= 100.01 },
+              "treemap tiles stay inside the canvas")
+        let areaSum = tiles.reduce(0.0) { $0 + $1.width * $1.height }
+        check(abs(areaSum - 10_000) < 1, "treemap tiles fill the canvas without overflow")
+        check(abs((tiles[0].width * tiles[0].height) / (tiles[1].width * tiles[1].height) - 2) < 0.05,
+              "treemap area ratio follows the weight ratio")
+        check(TreemapLayout.squarify(weights: [], in: CGRect(x: 0, y: 0, width: 10, height: 10)).isEmpty,
+              "treemap handles an empty level")
+
+        // MARK: 重复文件分组
+        let olderStamp = Date(timeIntervalSince1970: 1_000)
+        let recent = Date(timeIntervalSince1970: 9_000)
+        let dupes = DuplicateGroup(id: "g", size: 1_000, files: [
+            DuplicateFile(id: "/b/deep/path.bin", path: "/b/deep/path.bin", name: "path.bin", size: 1_000, modified: recent),
+            DuplicateFile(id: "/a/x.bin", path: "/a/x.bin", name: "x.bin", size: 1_000, modified: olderStamp),
+            DuplicateFile(id: "/c/y.bin", path: "/c/y.bin", name: "y.bin", size: 1_000, modified: recent),
+        ])
+        check(dupes.keeper?.path == "/a/x.bin", "duplicate keeper is the oldest copy")
+        check(dupes.wasted == 2_000, "wasted space counts every copy except the keeper")
+
+        // MARK: 操作历史解析
+        check(HistoryFormat.kind(for: "CLEAN") == .clean, "history recognises clean lines")
+        check(HistoryFormat.kind(for: "TRASH") == .trash, "history recognises trash lines")
+        check(HistoryFormat.kind(for: "ADMIN-DELETE") == .delete, "history recognises admin delete lines")
+        check(HistoryFormat.kind(for: "UNKNOWN") == .system, "unknown log lines fall back to system")
+        if let parsed = HistoryFormat.parse("2026/10/26 13:52:52") {
+            let parts = Calendar.current.dateComponents([.year, .month, .day, .hour], from: parsed)
+            check(parts.year == 2026 && parts.month == 10 && parts.day == 26 && parts.hour == 13,
+                  "history parses legacy log timestamps")
+        } else {
+            check(false, "history parses legacy log timestamps")
+        }
+        check(HistoryFormat.parse("not a date") == nil, "history leaves unparseable timestamps empty")
+        check(OperationKind.allCases.count >= 10, "history exposes every operation category")
+
+        // MARK: 隐私目录
+        let privacy = PrivacyCatalog.items()
+        check(Set(privacy.map(\.id)).count == privacy.count, "privacy item ids are unique")
+        check(privacy.contains { $0.clearsClipboard && $0.paths.isEmpty },
+              "clipboard item carries no file path")
+        check(privacy.allSatisfy { $0.paths.allSatisfy { $0.hasPrefix("/") } },
+              "privacy paths are absolute")
+        check(privacy.allSatisfy { item in
+            item.paths.allSatisfy { $0 != NSHomeDirectory() && $0 != NSHomeDirectory() + "/Library" }
+        }, "privacy never targets the home root or the Library root")
+        check(!PathSafety.canDelete(NSHomeDirectory() + "/Library/Safari/History.db"),
+              "the global delete whitelist stays narrow without an explicit allowlist")
+        check(!PathSafety.canDelete(NSHomeDirectory() + "/Documents/notes.txt"),
+              "documents remain outside the permanent delete whitelist")
+
+        // MARK: 大文件门槛
+        check(LargeSizeThreshold.allCases.map(\.rawValue) == LargeSizeThreshold.allCases.map(\.rawValue).sorted(),
+              "large file thresholds increase monotonically")
+        check(LargeFileScanner.exclusions.contains(NSHomeDirectory() + "/Library/Caches"),
+              "large file scan skips the cache tree owned by the clean module")
+
+        // MARK: 内存采样
+        let memory = MemoryProbe.read()
+        check(memory.total > 0, "memory sampler reports installed RAM")
+        check(memory.used > 0 && memory.used <= memory.total, "memory usage stays within physical RAM")
+        check((1...4).contains(memory.pressureLevel), "memory pressure level is a known value")
+
+        // MARK: 隐私白名单
+        let privacyRoot = root.appendingPathComponent("privacy-fixture")
+        try fm.createDirectory(at: privacyRoot, withIntermediateDirectories: true)
+        let privacyFile = privacyRoot.appendingPathComponent("Cookies")
+        try Data("fixture".utf8).write(to: privacyFile)
+        check(!PathSafety.canDelete(privacyFile.path),
+              "a privacy path outside the global whitelist is refused by default")
+        let allowed = Remover.remove([privacyFile.path], mode: .permanent, extraAllow: [privacyRoot.path])
+        check(allowed.removed == 1 && !fm.fileExists(atPath: privacyFile.path),
+              "an explicitly declared privacy path can be deleted permanently")
+        let outsideScope = root.appendingPathComponent("outside.txt")
+        try Data("keep".utf8).write(to: outsideScope)
+        let blocked = Remover.remove([outsideScope.path], mode: .permanent, extraAllow: [privacyRoot.path])
+        check(blocked.removed == 0 && fm.fileExists(atPath: outsideScope.path),
+              "the privacy allowlist does not widen the delete scope")
+
+        // MARK: 重复文件端到端
+        let dupRoot = root.appendingPathComponent("dup-fixture")
+        try fm.createDirectory(at: dupRoot, withIntermediateDirectories: true)
+        let payload = Data(repeating: 0x5A, count: 1_200_000)
+        let dupOlder = dupRoot.appendingPathComponent("older.bin")
+        let dupNewer = dupRoot.appendingPathComponent("newer.bin")
+        let dupUnique = dupRoot.appendingPathComponent("unique.bin")
+        try payload.write(to: dupOlder)
+        try payload.write(to: dupNewer)
+        try Data(repeating: 0x11, count: 1_200_000).write(to: dupUnique)
+        try fm.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_000_000)], ofItemAtPath: dupOlder.path)
+        try fm.setAttributes([.modificationDate: Date(timeIntervalSince1970: 2_000_000)], ofItemAtPath: dupNewer.path)
+        let dupCancellation = CleanupCancellationToken()
+        let found = DuplicateScanner.scan(minSize: 1_000_000, roots: [dupRoot.path],
+                                          cancellation: dupCancellation,
+                                          progress: { _, _, _ in })
+        check(found.count == 1 && found[0].files.count == 2,
+              "duplicate scan groups only byte-identical files of equal size")
+        check(found.first?.keeper?.path == dupOlder.path,
+              "duplicate scan keeps the oldest copy of each group")
+
+        // MARK: 模块分组
+        let grouped = ModuleGroup.all.flatMap(\.modules)
+        check(grouped.count == Module.allCases.count && Set(grouped) == Set(Module.allCases),
+              "every module appears in exactly one sidebar group")
 
         print("\(checks - failures)/\(checks) checks passed")
         if failures > 0 { exit(1) }
