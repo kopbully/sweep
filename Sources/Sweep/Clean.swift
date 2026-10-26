@@ -267,7 +267,7 @@ struct CleanView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16) {
+            LazyVStack(alignment: .leading, spacing: Space.s200) {
                 SectionTitle(title: "清理", subtitle: "查看已知缓存目录，按项选择后清理")
                 summaryCard
                 if engine.busy { progressCard }
@@ -286,7 +286,7 @@ struct CleanView: View {
                 }
                 ForEach(grouped, id: \.0) { category, items in categoryCard(category, items) }
             }
-            .padding(20)
+            .padding(Space.s300)
         }
         .background(Theme.bg)
         .onAppear { if !engine.hasScanned && !engine.scanning { engine.scan() } }
@@ -309,14 +309,19 @@ struct CleanView: View {
 
     private var summaryCard: some View {
         Card {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .center, spacing: 20) {
+            VStack(alignment: .leading, spacing: Space.s200) {
+                HStack(alignment: .center, spacing: Space.s200) {
+                    Image(systemName: "wind")
+                        .font(.system(size: 25, weight: .light))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 60, height: 60)
+                        .background(RoundedRectangle(cornerRadius: Radius.xl).fill(Theme.accentSoft))
                     VStack(alignment: .leading, spacing: 5) {
-                        Text("所选逻辑大小").font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                        Text("所选逻辑大小").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
                         Text(engine.selectedTotal.sizeText)
-                            .font(Typo.mono(Typo.xxl, .semibold)).foregroundStyle(Theme.accent)
+                            .font(Typo.f(Typo.display, .semibold).monospacedDigit()).foregroundStyle(Theme.accent)
                         Text("\(engine.selectedItems.count) 项已选 · 占用估算 \(engine.selectedAllocated.bytesText)")
-                            .font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+                            .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
                     }
                     Spacer()
                     SweepButton(.secondary, title: "重新扫描", systemImage: "arrow.clockwise") { engine.scan() }
@@ -328,7 +333,7 @@ struct CleanView: View {
                     .disabled(engine.selectedItems.isEmpty || engine.busy)
                 }
                 Text("跨候选共享硬链接可能重复计入合计；APFS 克隆与快照也会影响实际释放空间。")
-                    .font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
+                    .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
             }
         }
     }
@@ -337,14 +342,22 @@ struct CleanView: View {
         Card {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 10) {
-                    TextField("按名称或路径筛选", text: $search)
-                        .textFieldStyle(.roundedBorder).frame(maxWidth: 320)
+                    HStack(spacing: Space.s75) {
+                        Image(systemName: "magnifyingglass").foregroundStyle(Theme.textMuted)
+                        TextField("按名称或路径筛选", text: $search)
+                            .textFieldStyle(.plain)
+                    }
+                    .font(Typo.f(Typo.sm))
+                    .padding(.horizontal, Space.s100)
+                    .padding(.vertical, Space.s75)
+                    .background(RoundedRectangle(cornerRadius: Radius.md).fill(Theme.surfaceRaised))
+                    .frame(maxWidth: 340)
                     Spacer()
                     SweepButton(.quiet, title: "选择推荐项") { engine.selectRecommended() }.disabled(engine.busy)
                     SweepButton(.quiet, title: "全不选") { engine.deselectAll() }.disabled(engine.busy)
                 }
                 Text(search.isEmpty ? "默认不勾选；正在运行的应用缓存或扫描不完整的项目会保留。" : "清理使用全部已勾选项，包含筛选结果之外的选择。")
-                    .font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
+                    .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
             }
         }
     }
@@ -411,11 +424,18 @@ struct CleanView: View {
 
     private func categoryCard(_ name: String, _ items: [CacheItem]) -> some View {
         Card {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 8) {
-                    Text(name).font(.system(size: 14, weight: .semibold))
-                    Text("\(items.count) 项 · \(items.reduce(Int64(0)) { $0 + $1.size }.sizeText)")
-                        .font(.system(size: 11)).foregroundStyle(Theme.textSecondary)
+            VStack(alignment: .leading, spacing: Space.s75) {
+                HStack(spacing: Space.s100) {
+                    Image(systemName: "folder.fill")
+                        .font(.system(size: 17))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 32, height: 32)
+                        .background(RoundedRectangle(cornerRadius: Radius.md).fill(Theme.accentSoft))
+                    VStack(alignment: .leading, spacing: Space.s25) {
+                        Text(name).font(Typo.f(Typo.base, .semibold))
+                        Text("\(items.count) 项 · \(items.reduce(Int64(0)) { $0 + $1.size }.sizeText)")
+                            .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
+                    }
                     Spacer()
                     let eligible = items.filter(\.canSelect)
                     let allSelected = !eligible.isEmpty && eligible.allSatisfy(\.selected)
@@ -423,6 +443,7 @@ struct CleanView: View {
                         for item in eligible { engine.setSelected(item.id, !allSelected) }
                     }.disabled(engine.busy || eligible.isEmpty)
                 }
+                Rectangle().fill(Theme.border).frame(height: 1).padding(.vertical, Space.s50)
                 LazyVStack(spacing: 4) { ForEach(items) { item in itemRow(item) } }
             }
         }
@@ -434,9 +455,12 @@ struct CleanView: View {
                 get: { engine.items.first { $0.id == item.id }?.selected ?? false },
                 set: { engine.setSelected(item.id, $0) }
             ))
-            .labelsHidden().controlSize(.mini).disabled(engine.busy || !item.canSelect)
+            .labelsHidden().toggleStyle(.checkbox).controlSize(.small).disabled(engine.busy || !item.canSelect)
             Image(systemName: item.canSelect ? "folder.fill" : "lock.fill")
-                .font(.system(size: 11)).foregroundStyle(Theme.textSecondary).padding(.top, 3)
+                .font(.system(size: 13))
+                .foregroundStyle(item.canSelect ? Theme.accent : Theme.textMuted)
+                .frame(width: 28, height: 28)
+                .background(RoundedRectangle(cornerRadius: Radius.sm).fill(Theme.surfaceRaised))
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(item.name).font(Typo.f(Typo.sm, .medium)).foregroundStyle(Theme.textPrimary).lineLimit(1)
@@ -445,7 +469,9 @@ struct CleanView: View {
                 Text(shortPath(item.path)).font(Typo.mono(Typo.xs)).foregroundStyle(Theme.textMuted)
                     .lineLimit(1).truncationMode(.middle)
                 if let reason = item.reason {
-                    Text(reason).font(Typo.f(Typo.xs)).foregroundStyle(Theme.accentWarn).fixedSize(horizontal: false, vertical: true)
+                    Text(reason).font(Typo.f(Typo.xs))
+                        .foregroundStyle(item.canSelect ? Theme.textSecondary : Theme.accentWarn)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if item.hasExternalHardLinks {
                     Text("包含共享硬链接，移除后释放量可能较少").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
@@ -460,7 +486,9 @@ struct CleanView: View {
                 Text("占用 \(item.allocatedSize.sizeText)").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
             }.frame(width: 92, alignment: .trailing)
         }
-        .padding(.vertical, 5)
+        .padding(.horizontal, Space.s75)
+        .padding(.vertical, Space.s75)
+        .rowBackground(selected: item.selected)
     }
 
     private func shortPath(_ path: String) -> String {

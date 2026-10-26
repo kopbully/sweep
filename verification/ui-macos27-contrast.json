@@ -1,0 +1,47 @@
+{
+  "primary_action": {
+    "foreground": "#FFFFFF",
+    "background": "#2869DB",
+    "ratio": 5.08
+  },
+  "sidebar_selection": {
+    "foreground": "#FFFFFF",
+    "background": "#3070DF",
+    "ratio": 4.66
+  },
+  "light_body": {
+    "foreground": "#202C3F",
+    "background": "#FFFFFF",
+    "ratio": 14.06
+  },
+  "light_secondary": {
+    "foreground": "#5D6A7E",
+    "background": "#FFFFFF",
+    "ratio": 5.49
+  },
+  "light_muted_on_canvas": {
+    "foreground": "#667085",
+    "background": "#F4F7FC",
+    "ratio": 4.63
+  },
+  "dark_body": {
+    "foreground": "#F0F0F4",
+    "background": "#29292E",
+    "ratio": 12.73
+  },
+  "dark_muted": {
+    "foreground": "#9393A3",
+    "background": "#1C1C20",
+    "ratio": 5.62
+  },
+  "light_accent": {
+    "foreground": "#246CDF",
+    "background": "#FFFFFF",
+    "ratio": 4.9
+  },
+  "dark_accent": {
+    "foreground": "#78AAFF",
+    "background": "#29292E",
+    "ratio": 6.2
+  }
+}

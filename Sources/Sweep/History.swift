@@ -363,12 +363,12 @@ struct HistoryView: View {
         Button(action: action) {
             Text(title)
                 .font(Typo.f(Typo.xs, .medium))
-                .foregroundStyle(active ? Color.black : Theme.textSecondary)
+                .foregroundStyle(active ? Color.white : Theme.textSecondary)
                 .padding(.horizontal, Space.s100)
                 .padding(.vertical, Space.s50)
                 .background(
                     RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                        .fill(active ? Theme.accent : Theme.surfaceRaised)
+                        .fill(active ? Theme.actionFill : Theme.surfaceRaised)
                 )
         }
         .buttonStyle(.plain)

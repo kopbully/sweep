@@ -3,38 +3,40 @@ import AppKit
 
 // MARK: - 视觉令牌
 //
-// 取值来源：elayadesign/ai-design-skills 的 landing-page-design 视觉系统。
-// 暗色底板只允许 #000000 / #181818 / #1F1F1F / #272727 / #313131 五档，
-// 背景不做渐变（渐变只用于标题文字），动效只作用于透明度与位移，
-// 圆角遵守嵌套公式 inner = outer - gap。
+// 参考 a2d2-dev/macos27-claude 的 glass.css 与 Finder 窗口层次。
+// 玻璃材质由 AppKit 合成，列表与卡片保持实色以保证文字对比度。
 
 enum Theme {
-    // 底板
-    static let bg = Color(hex: "#000000")
-    static let surface = Color(hex: "#181818")
-    static let surfaceRaised = Color(hex: "#1F1F1F")
-    static let surfaceHover = Color(hex: "#272727")
-    static let border = Color(hex: "#313131")
+    static let bg = Color.adaptive(light: "#F4F7FC", dark: "#1C1C20")
+    static let surface = Color.adaptive(light: "#FFFFFF", dark: "#29292E")
+    static let surfaceRaised = Color.adaptive(light: "#EDF1F7", dark: "#34343A")
+    static let surfaceHover = Color.adaptive(light: "#E3EAF4", dark: "#414148")
+    static let border = Color.adaptive(light: "#DCE3ED", dark: "#42424A")
+    static let chrome = Color.adaptive(light: "#EAF1FB", dark: "#24242B")
+    static let chromeTint = Color.adaptive(light: "#F5F9FF", dark: "#1C1C24").opacity(0.34)
+    static let shadow = Color.adaptive(light: "#233653", dark: "#000000").opacity(0.07)
 
     // 文字
-    static let textPrimary = Color(hex: "#F5F5F5")
-    static let textSecondary = Color(hex: "#9B9B9B")
-    static let textMuted = Color(hex: "#6B6B6B")
+    static let textPrimary = Color.adaptive(light: "#202C3F", dark: "#F0F0F4")
+    static let textSecondary = Color.adaptive(light: "#5D6A7E", dark: "#B9B9C5")
+    static let textMuted = Color.adaptive(light: "#667085", dark: "#9393A3")
 
-    // 强调色（品牌绿，沿用既有识别色）
-    static let accent = Color(hex: "#3ECF8E")
-    static let accentSoft = Color(hex: "#3ECF8E").opacity(0.10)
-    static let accentWarn = Color(hex: "#E8A33D")
-    static let accentWarnSoft = Color(hex: "#E8A33D").opacity(0.14)
-    static let accentDanger = Color(hex: "#E25B5B")
-    static let accentDangerSoft = Color(hex: "#E25B5B").opacity(0.14)
+    static let accent = Color.adaptive(light: "#246CDF", dark: "#78AAFF")
+    static let actionFill = Color(hex: "#2869DB")
+    static let selection = Color(hex: "#3070DF")
+    static let accentSoft = accent.opacity(0.10)
+    static let success = Color.adaptive(light: "#208458", dark: "#57C995")
+    static let accentWarn = Color.adaptive(light: "#A26612", dark: "#F0B65D")
+    static let accentWarnSoft = accentWarn.opacity(0.12)
+    static let accentDanger = Color.adaptive(light: "#CC3945", dark: "#FF7B86")
+    static let accentDangerSoft = accentDanger.opacity(0.10)
 
     // 兼容既有调用点
     static let card = surface
     static let cardBorder = border
 
     static func healthColor(_ score: Double) -> Color {
-        if score >= 80 { return accent }
+        if score >= 80 { return success }
         if score >= 50 { return accentWarn }
         return accentDanger
     }
@@ -45,22 +47,17 @@ enum Theme {
         return accent
     }
 
-    /// 标题渐变：暗色主题下由 #FFFFFF 过渡到 #9B9B9B，只作用于文字
-    static var titleGradient: LinearGradient {
-        LinearGradient(colors: [Color(hex: "#FFFFFF"), Color(hex: "#9B9B9B")],
-                       startPoint: .leading, endPoint: .trailing)
-    }
 }
 
-/// 字号阶梯：12 / 14 / 16 / 18 / 20 / 24 / 30
+/// 使用原生 SF 字体，与参考项目的 macOS 字体栈保持一致。
 enum Typo {
-    static let xs: CGFloat = 12
-    static let sm: CGFloat = 14
-    static let base: CGFloat = 16
-    static let lg: CGFloat = 18
+    static let xs: CGFloat = 11
+    static let sm: CGFloat = 13
+    static let base: CGFloat = 15
+    static let lg: CGFloat = 17
     static let xl: CGFloat = 20
-    static let xxl: CGFloat = 24
-    static let display: CGFloat = 30
+    static let xxl: CGFloat = 26
+    static let display: CGFloat = 34
 
     static func f(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight)
@@ -107,7 +104,20 @@ enum Motion {
 }
 
 extension Color {
+    static func adaptive(light: String, dark: String) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let hex = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+            return NSColor(hex: hex)
+        })
+    }
+
     init(hex: String) {
+        self.init(nsColor: NSColor(hex: hex))
+    }
+}
+
+private extension NSColor {
+    convenience init(hex: String) {
         var h = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         if h.hasPrefix("#") { h.removeFirst() }
         var v: UInt64 = 0
@@ -120,13 +130,60 @@ extension Color {
         } else {
             r = 0.5; g = 0.5; b = 0.5
         }
-        self = Color(red: r, green: g, blue: b)
+        self.init(srgbRed: r, green: g, blue: b, alpha: 1)
+    }
+}
+
+/// 只在窗口侧栏和工具栏使用系统磨砂，避免为每个列表项建立模糊层。
+struct GlassSurface: View {
+    var material: NSVisualEffectView.Material = .sidebar
+    var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        Group {
+            if reduceTransparency {
+                Theme.chrome
+            } else {
+                NativeGlass(material: material, blendingMode: blendingMode)
+                    .overlay(Theme.chromeTint)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct NativeGlass: NSViewRepresentable {
+    let material: NSVisualEffectView.Material
+    let blendingMode: NSVisualEffectView.BlendingMode
+
+    func makeNSView(context: Context) -> NSVisualEffectView { NSVisualEffectView() }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+        view.material = material
+        view.blendingMode = blendingMode
+        view.state = .active
+    }
+}
+
+struct SweepWindowChrome: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { ChromeView() }
+    func updateNSView(_ view: NSView, context: Context) {}
+
+    private final class ChromeView: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.titlebarAppearsTransparent = true
+            window?.isMovableByWindowBackground = true
+            window?.backgroundColor = .windowBackgroundColor
+        }
     }
 }
 
 // MARK: - 按钮
 
-enum ButtonKind {
+enum ButtonKind: Equatable {
     case primary
     case secondary
     case quiet
@@ -138,10 +195,7 @@ struct SweepButton<Label: View>: View {
     let action: () -> Void
     @ViewBuilder let label: () -> Label
 
-    @Environment(\.isEnabled) private var enabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
-    @State private var pressed = false
 
     init(_ kind: ButtonKind = .secondary, action: @escaping () -> Void, @ViewBuilder label: @escaping () -> Label) {
         self.kind = kind
@@ -150,43 +204,48 @@ struct SweepButton<Label: View>: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            label()
-                .font(Typo.f(Typo.sm, .semibold))
-                .foregroundStyle(foreground)
-                .padding(.horizontal, Space.s100)
-                .padding(.vertical, Space.s75)
-                .background(
-                    RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                        .fill(background)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                        .strokeBorder(borderColor, lineWidth: 1)
-                )
-                .contentShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-                .scaleEffect(pressed ? 0.98 : 1)
-                .opacity(enabled ? 1 : 0.7)
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .onHover { hovering = $0 }
-        .animation(reduceMotion ? .none : Motion.quick, value: hovering)
-        .animation(reduceMotion ? .none : Motion.instant, value: pressed)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in pressed = true }
-                .onEnded { _ in pressed = false }
-        )
+        Button(action: action, label: label)
+            .buttonStyle(SweepButtonStyle(kind: kind, hovering: hovering))
+            .onHover { hovering = $0 }
+    }
+}
+
+private struct SweepButtonStyle: ButtonStyle {
+    let kind: ButtonKind
+    let hovering: Bool
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(Typo.f(Typo.sm, .semibold))
+            .foregroundStyle(foreground)
+            .padding(.horizontal, Space.s100)
+            .padding(.vertical, Space.s75)
+            .background(
+                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                    .fill(background)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                    .strokeBorder(borderColor, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
+            .shadow(color: kind == .primary && enabled ? Theme.accent.opacity(0.16) : .clear,
+                    radius: 4, y: 2)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(enabled ? 1 : 0.55)
+            .animation(reduceMotion ? .none : Motion.quick, value: hovering)
+            .animation(reduceMotion ? .none : Motion.instant, value: configuration.isPressed)
     }
 
     private var foreground: Color {
         if !enabled { return Theme.textMuted }
         switch kind {
-        case .primary: return Color.black
+        case .primary: return Color.white
         case .secondary: return Theme.textPrimary
         case .quiet: return Theme.textSecondary
-        case .danger: return Theme.textPrimary
+        case .danger: return Theme.accentDanger
         }
     }
 
@@ -194,13 +253,13 @@ struct SweepButton<Label: View>: View {
         if !enabled { return Theme.surfaceRaised }
         switch kind {
         case .primary:
-            return hovering ? Theme.accent.opacity(0.86) : Theme.accent
+            return hovering ? Theme.selection : Theme.actionFill
         case .secondary:
             return hovering ? Theme.surfaceHover : Theme.surface
         case .quiet:
             return hovering ? Theme.surfaceHover : Color.clear
         case .danger:
-            return hovering ? Theme.accentDanger.opacity(0.24) : Theme.accentDangerSoft
+            return hovering ? Theme.accentDanger.opacity(0.16) : Theme.accentDangerSoft
         }
     }
 
@@ -209,7 +268,7 @@ struct SweepButton<Label: View>: View {
         case .primary: return Color.clear
         case .secondary: return Theme.border
         case .quiet: return Color.clear
-        case .danger: return Theme.accentDanger.opacity(0.5)
+        case .danger: return Theme.accentDanger.opacity(0.22)
         }
     }
 }
@@ -233,7 +292,7 @@ extension SweepButton where Label == HStack<TupleView<(Image, Text)>> {
 
 // MARK: - 容器与标题
 
-/// 统一面板：平底、四周描边、16 圆角
+/// 统一内容面板：与玻璃侧栏分层的清晰阅读表面。
 struct Panel<Content: View>: View {
     var padding: CGFloat = Space.s200
     @ViewBuilder let content: () -> Content
@@ -244,7 +303,7 @@ struct Panel<Content: View>: View {
     }
 
     var body: some View {
-        content()
+        VStack(alignment: .leading, spacing: 0) { content() }
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.surface)
@@ -253,10 +312,11 @@ struct Panel<Content: View>: View {
                 RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
                     .strokeBorder(Theme.border, lineWidth: 1)
             )
+            .shadow(color: Theme.shadow, radius: 10, y: 3)
     }
 }
 
-/// 页头：渐变标题 + 说明 + 右侧操作
+/// 页头：实色标题 + 说明 + 右侧操作。
 struct PageHeader<Actions: View>: View {
     let title: String
     let subtitle: String
@@ -273,7 +333,7 @@ struct PageHeader<Actions: View>: View {
             VStack(alignment: .leading, spacing: Space.s75) {
                 Text(title)
                     .font(Typo.f(Typo.xxl, .semibold))
-                    .foregroundStyle(Theme.titleGradient)
+                    .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
                 Text(subtitle)
                     .font(Typo.f(Typo.sm))
@@ -331,7 +391,7 @@ struct Tag: View {
         .padding(.horizontal, Space.s75)
         .padding(.vertical, Space.s25)
         .background(
-            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).fill(background)
+            Capsule().fill(background)
         )
     }
 
@@ -366,7 +426,7 @@ struct MetricTile: View {
                 .font(Typo.f(Typo.xs))
                 .foregroundStyle(Theme.textSecondary)
             Text(value)
-                .font(Typo.mono(Typo.xl, .semibold))
+                .font(Typo.f(Typo.xxl, .semibold).monospacedDigit())
                 .foregroundStyle(tone)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -420,8 +480,11 @@ struct EmptyState<Action: View>: View {
     var body: some View {
         VStack(spacing: Space.s100) {
             Image(systemName: icon)
-                .font(.system(size: 26, weight: .light))
-                .foregroundStyle(Theme.textMuted)
+                .font(.system(size: 25, weight: .light))
+                .foregroundStyle(Theme.accent)
+                .frame(width: 60, height: 60)
+                .background(RoundedRectangle(cornerRadius: Radius.xl).fill(Theme.accentSoft))
+                .padding(.bottom, Space.s50)
             Text(title)
                 .font(Typo.f(Typo.base, .semibold))
                 .foregroundStyle(Theme.textPrimary)
@@ -472,6 +535,10 @@ struct RowBackground: ViewModifier {
                 RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                     .fill(selected ? Theme.accentSoft : (hovering ? Theme.surfaceRaised : Color.clear))
             )
+            .overlay(
+                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                    .strokeBorder(selected ? Theme.accent.opacity(0.18) : .clear, lineWidth: 1)
+            )
             .onHover { hovering = $0 }
             .animation(reduceMotion ? .none : Motion.quick, value: hovering)
     }
@@ -514,7 +581,8 @@ struct SegmentedBar<Item: Hashable>: View {
                         .padding(.vertical, Space.s50)
                         .background(
                             RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                                .fill(active ? Theme.surfaceHover : Color.clear)
+                                .fill(active ? Theme.surface : Color.clear)
+                                .shadow(color: active ? Theme.shadow : .clear, radius: 2, y: 1)
                         )
                 }
                 .buttonStyle(.plain)
@@ -525,6 +593,7 @@ struct SegmentedBar<Item: Hashable>: View {
             RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                 .fill(Theme.surfaceRaised)
         )
+        .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(Theme.border, lineWidth: 1))
     }
 }
 

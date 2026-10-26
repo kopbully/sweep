@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-26",
+  "version": "0.6.0",
+  "installedPath": "/Applications/Sweep.app",
+  "reference": "https://github.com/a2d2-dev/macos27-claude",
+  "referenceTreeSha": "e3a4e72b8d46b55828796a362799be1d7f511ef4",
+  "referenceBlobs": {
+    "LICENSE": "1c1f010a556040bebd0156de5351912735310e57",
+    "src/apps/finder/index.tsx": "d4635717a57805b31050d5024e28059b54f2b1d7",
+    "src/components/Window.tsx": "8c19cc986040423777e12c428adb6c98898edcad",
+    "src/styles/glass.css": "38c62c333d462a6c2729793f8374931c3633a002",
+    "src/styles/index.css": "a35ac18b0de248f0a26d5a3d760ecc45de94d570"
+  },
+  "installedBinarySha256": "8b613ecb179f2eb2d82c436888b175b5b8b803e2c7d7dc0ca9529c36c8eeda08",
+  "regression": {
+    "passed": 123,
+    "total": 123
+  },
+  "runtimeAppearanceObserved": "light",
+  "windowSizesObserved": [
+    [
+      1240,
+      800
+    ],
+    [
+      1080,
+      732
+    ]
+  ],
+  "blackHoleSourceUnchanged": true,
+  "blackHoleResourceHashesMatch": true,
+  "realCleanupExecutedDuringUIAcceptance": false
+}

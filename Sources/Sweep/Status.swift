@@ -321,7 +321,7 @@ struct StatusView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: Space.s200) {
                 SectionTitle(title: "监控", subtitle: "本机正在发生的每一件事")
 
                 healthRow
@@ -350,7 +350,7 @@ struct StatusView: View {
 
                 processCard
             }
-            .padding(20)
+            .padding(Space.s300)
         }
         .onAppear { if scenePhase != .background { sampler.start() } }
         .onDisappear { sampler.stop() }
@@ -363,24 +363,30 @@ struct StatusView: View {
 
     private var healthRow: some View {
         Card {
-            HStack(spacing: 18) {
+            HStack(spacing: Space.s200) {
                 GaugeRing(value: healthScore() / 100, color: Theme.healthColor(healthScore()))
-                    .frame(width: 52, height: 52)
+                    .frame(width: 60, height: 60)
                     .overlay(
                         Text(sampler.snapshot.timestamp == nil ? "—" : "\(Int(healthScore()))")
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .semibold, design: .rounded))
                             .foregroundStyle(Theme.textPrimary)
                     )
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Space.s50) {
                     Text("健康分")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(Typo.f(Typo.base, .semibold))
                         .foregroundStyle(Theme.textPrimary)
                     Text(healthNote())
-                        .font(.system(size: 12))
+                        .font(Typo.f(Typo.sm))
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(2)
                 }
                 Spacer()
+                VStack(alignment: .trailing, spacing: Space.s50) {
+                    Tag(text: sampler.snapshot.timestamp == nil ? "采样中" : "实时采样",
+                        tone: sampler.snapshot.timestamp == nil ? .neutral : .accent,
+                        icon: "waveform.path.ecg")
+                    Text("每秒更新").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
+                }
             }
         }
     }
@@ -390,21 +396,26 @@ struct StatusView: View {
     private var diskCard: some View {
         let ratio = Double(sampler.snapshot.diskTotalBytes - sampler.snapshot.diskFreeBytes) / Double(max(sampler.snapshot.diskTotalBytes, 1))
         return Card {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Space.s100) {
                 HStack {
-                    Text("磁盘").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text("磁盘").font(Typo.f(Typo.sm, .medium)).foregroundStyle(Theme.textSecondary)
                     Spacer()
-                    Text(sampler.snapshot.diskTotalBytes > 0 ? "\(Int(ratio * 100))% 已用" : "暂无数据")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.usageColor(ratio * 100))
+                    Image(systemName: "internaldrive").foregroundStyle(Theme.textMuted)
                 }
-                GaugeRing(value: ratio, color: Theme.usageColor(ratio * 100))
-                    .frame(width: 44, height: 44)
-                    .frame(maxWidth: .infinity)
-                Text("空闲 \(sampler.snapshot.diskFreeBytes.bytesText) / \(sampler.snapshot.diskTotalBytes.bytesText)")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Theme.textSecondary)
+                HStack(alignment: .firstTextBaseline, spacing: Space.s50) {
+                    Text(sampler.snapshot.diskTotalBytes > 0 ? sampler.snapshot.diskFreeBytes.bytesText : "采样中")
+                        .font(Typo.f(Typo.xxl, .semibold).monospacedDigit())
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                    if sampler.snapshot.diskTotalBytes > 0 {
+                        Text("可用").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
+                    }
+                }
+                ProgressBar(value: ratio, color: Theme.usageColor(ratio * 100), height: 5)
+                Spacer(minLength: 0)
+                Text("已用 \(Int(ratio * 100))% · 共 \(sampler.snapshot.diskTotalBytes.bytesText)")
+                    .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
             }
+            .frame(height: 126, alignment: .topLeading)
         }
     }
 
@@ -412,23 +423,23 @@ struct StatusView: View {
         let isDown = direction == .down
         let bps = isDown ? sampler.snapshot.netInBps : sampler.snapshot.netOutBps
         return Card {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Space.s100) {
                 HStack {
-                    Image(systemName: isDown ? "arrow.down" : "arrow.up")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(isDown ? Theme.accent : Theme.textSecondary)
                     Text(isDown ? "下载" : "上传")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textSecondary)
+                        .font(Typo.f(Typo.sm, .medium)).foregroundStyle(Theme.textSecondary)
                     Spacer()
-                    Text(bps.map { $0 == 0 ? "0 B/s" : "\(max($0, 0).bytesText)/s" } ?? "采样中")
-                        .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(Theme.textPrimary)
+                    Image(systemName: isDown ? "arrow.down.circle" : "arrow.up.circle")
+                        .foregroundStyle(Theme.accent)
                 }
-                Sparkline(data: isDown ? sampler.netInHistory : sampler.netOutHistory,
-                          color: isDown ? Theme.accent : Theme.textSecondary.opacity(0.7))
-                    .frame(height: 26)
+                Text(bps.map { $0 == 0 ? "0 B/s" : "\(max($0, 0).bytesText)/s" } ?? "采样中")
+                    .font(Typo.f(Typo.xxl, .semibold).monospacedDigit())
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1).minimumScaleFactor(0.75)
+                Sparkline(data: isDown ? sampler.netInHistory : sampler.netOutHistory, color: Theme.accent)
+                    .frame(height: 28)
+                Text("Wi-Fi 与以太网合计").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
             }
+            .frame(height: 126, alignment: .topLeading)
         }
         .help("Wi-Fi 与以太网物理接口合计；不重复累计 VPN 隧道流量。")
     }
@@ -437,64 +448,59 @@ struct StatusView: View {
 
     private func batteryCard(percent: Double, onAC: Bool) -> some View {
         Card {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Space.s100) {
                 HStack {
-                    Image(systemName: onAC ? "bolt.fill" : "battery.75percent")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(onAC ? Theme.accent : Theme.textSecondary)
-                    Text("电池").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text("电池").font(Typo.f(Typo.sm, .medium)).foregroundStyle(Theme.textSecondary)
                     Spacer()
-                    Text("\(Int(percent))%")
-                        .font(.system(size: 12, weight: .bold).monospacedDigit())
-                        .foregroundStyle(Theme.textPrimary)
+                    Image(systemName: onAC ? "bolt.fill" : "battery.75percent").foregroundStyle(Theme.success)
                 }
-                GaugeRing(value: percent / 100, color: percent > 20 ? Theme.accent : Theme.accentDanger)
-                    .frame(width: 40, height: 40)
-                    .frame(maxWidth: .infinity)
+                Text("\(Int(percent))%").font(Typo.f(Typo.xxl, .semibold).monospacedDigit())
+                ProgressBar(value: percent / 100, color: percent > 20 ? Theme.success : Theme.accentDanger, height: 5)
+                Spacer(minLength: 0)
                 Text(onAC ? "已接通电源" : "使用电池")
-                    .font(.system(size: 10))
-                    .foregroundStyle(Theme.textSecondary)
+                    .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
             }
+            .frame(height: 126, alignment: .topLeading)
         }
     }
 
     private var uptimeCard: some View {
         Card {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Space.s100) {
                 HStack {
-                    Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.textSecondary)
-                    Text("开机时长").font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text("开机时长").font(Typo.f(Typo.sm, .medium)).foregroundStyle(Theme.textSecondary)
+                    Spacer()
+                    Image(systemName: "clock.arrow.circlepath").foregroundStyle(Theme.textSecondary)
                 }
-                Spacer()
                 Text(sampler.snapshot.uptimeText)
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(Typo.f(Typo.xxl, .semibold).monospacedDigit())
                     .foregroundStyle(Theme.textPrimary)
-                Spacer()
+                    .lineLimit(1).minimumScaleFactor(0.75)
+                Spacer(minLength: 0)
+                Text("自本次系统启动").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
             }
+            .frame(height: 126, alignment: .topLeading)
         }
     }
 
     private func metricCard(title: String, value: String, ratio: Double, detail: String, color: Color, series: [Double]) -> some View {
         Card {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: Space.s100) {
                 HStack {
-                    Text(title).font(.system(size: 12)).foregroundStyle(Theme.textSecondary)
+                    Text(title).font(Typo.f(Typo.sm, .medium)).foregroundStyle(Theme.textSecondary)
                     Spacer()
-                    Text(value)
-                        .font(.system(size: 12, weight: .bold).monospacedDigit())
-                        .foregroundStyle(Theme.textPrimary)
+                    Image(systemName: title == "CPU" ? "cpu" : "memorychip").foregroundStyle(Theme.accent)
                 }
-                Sparkline(data: series, color: color)
-                    .frame(height: 24)
+                Text(value).font(Typo.f(Typo.xxl, .semibold).monospacedDigit())
+                    .foregroundStyle(Theme.textPrimary).lineLimit(1).minimumScaleFactor(0.75)
+                Sparkline(data: series, color: color).frame(height: 28)
                 HStack {
-                    GaugeRing(value: ratio, color: color)
-                        .frame(width: 12, height: 12)
-                    Text(detail).font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
+                    GaugeRing(value: ratio, color: color).frame(width: 10, height: 10)
+                    Text(detail).font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
                     Spacer()
                 }
             }
+            .frame(height: 126, alignment: .topLeading)
         }
     }
 

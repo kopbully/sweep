@@ -84,6 +84,7 @@ struct TreemapView: View {
     let entries: [DiskEntry]
     var onSelect: (DiskEntry) -> Void
     @State private var hovered: String?
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { geo in
@@ -157,8 +158,10 @@ struct TreemapView: View {
 
     private func color(for tile: TreemapTile, index: Int) -> Color {
         guard tile.entry != nil else { return Theme.surfaceHover }
-        // 相邻区块要能一眼分开，所以明度跨度拉大
-        let ramps: [Double] = [0.86, 0.58, 0.44, 0.34, 0.27, 0.22, 0.18, 0.15]
+        // 深浅外观分别控制最大染色量，保证小字号名称在区块上仍可读。
+        let ramps: [Double] = colorScheme == .dark
+            ? [0.28, 0.23, 0.19, 0.16, 0.13, 0.10, 0.08, 0.06]
+            : [0.50, 0.40, 0.32, 0.26, 0.21, 0.17, 0.13, 0.10]
         return Theme.accent.opacity(ramps[index % ramps.count])
     }
 }
