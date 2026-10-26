@@ -2,8 +2,6 @@ export interface Point { x: number; y: number }
 export interface Size { width: number; height: number }
 // 与 BlackHoleMetrics.side 一致：悬浮窗缩小后不再遮挡桌面。
 export const WIDGET_SIZE: Size = { width: 168, height: 168 };
-// 与 shaders/blackhole.ts 的 ZOOM_IDLE / ZOOM_ACTIVE 一致：>1 表示画面更小。
-export const HOLE_ZOOM = { idle: 1.20, active: 0.88 };
 export const clamp01 = (value: number): number => Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
 
 // AppKit supplies CSS points with a top-left origin, including points outside the view.

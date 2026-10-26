@@ -6,10 +6,10 @@ html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background:
 #space { display: block; }
 .file { position: absolute; left: 0; top: 0; width: 34px; height: 34px; will-change: transform, opacity; transform-origin: center; }
 .file img { width: 34px; height: 34px; object-fit: contain; filter: drop-shadow(0 2px 4px #000a); }
-.file .name { position: absolute; width: 72px; left: -19px; top: 35px; padding: 1px 4px; border-radius: 4px; background: #0b1220e0; color: #dbe9ff; font-size: 9px; line-height: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+.file .name { position: absolute; width: 72px; left: -19px; top: 35px; padding: 1px 4px; border-radius: 4px; background: #15131bd9; color: #fff1d8; font-size: 9px; line-height: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
 .file.failed img { filter: drop-shadow(0 0 5px #ff7b86); }
-#status { position: absolute; bottom: 6px; left: 10px; right: 10px; color: #cfe3ff; font-size: 10px; font-weight: 600; line-height: 14px; text-align: center; text-shadow: 0 1px 4px #000; pointer-events: none; }
-#status:not(:empty) { padding: 3px 6px; border: 1px solid #78aaff2e; border-radius: 7px; background: #0b1220e2; }
+#status { position: absolute; bottom: 6px; left: 10px; right: 10px; color: #ffe4bf; font-size: 10px; font-weight: 600; line-height: 14px; text-align: center; text-shadow: 0 1px 4px #000; pointer-events: none; }
+#status:not(:empty) { padding: 3px 6px; border: 1px solid #ffd6a024; border-radius: 7px; background: #17131cdb; }
 #failures { position: absolute; top: 6px; left: 6px; right: 6px; max-height: 62px; overflow: auto; color: #ffcdd2; background: #1d1216f2; border-radius: 7px; font-size: 10px; line-height: 13px; }
 #failures:not(:empty) { border: 1px solid #ff7b8652; padding: 4px 6px; }
 .failure { overflow-wrap: anywhere; }

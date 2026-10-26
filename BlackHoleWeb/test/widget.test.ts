@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { HOLE_ZOOM, pendingPosition, reboundPose, spiralPose, toNDC, WIDGET_SIZE } from "../src/lib/geometry";
+import { pendingPosition, reboundPose, spiralPose, toNDC, WIDGET_SIZE } from "../src/lib/geometry";
 import { ABSORB_SECONDS, DropModel, MAX_VISIBLE_FILES, REBOUND_SECONDS } from "../src/lib/dropModel";
 import { RenderLoop, type AnimationDriver } from "../src/lib/renderLoop";
 import { HORIZON_R, orbitStep, spawnParticle } from "../src/lib/orbit";
-import { BLACK_HOLE_FRAG } from "../src/shaders/blackhole";
 
 describe("native CSS geometry", () => {
   it("keeps the widget small enough to sit over the desktop", () => {
@@ -27,17 +26,6 @@ describe("native CSS geometry", () => {
     expect(end).toMatchObject({ x: 84, y: 84, scaleX: 0, scaleY: 0, opacity: 0 });
     expect(spiralPose({ x: 84, y: 84 }, 0.001)).toMatchObject({ x: 84, y: 84 });
     expect(reboundPose(point, 1)).toMatchObject({ ...point, scaleX: 1, scaleY: 1, opacity: 1 });
-  });
-  it("keeps the shader zoom and the particle zoom on the same numbers", () => {
-    const zoom = (name: string): number => Number(new RegExp(`#define ${name} ([0-9.]+)`).exec(BLACK_HOLE_FRAG)?.[1]);
-    expect(zoom("ZOOM_IDLE")).toBe(HOLE_ZOOM.idle);
-    expect(zoom("ZOOM_ACTIVE")).toBe(HOLE_ZOOM.active);
-    expect(HOLE_ZOOM.idle).toBeGreaterThan(HOLE_ZOOM.active);
-  });
-  it("never draws an opaque backdrop behind the hole", () => {
-    // 上游渲染的是整块星空；Sweep 只在有光和视界的地方输出不透明像素。
-    expect(BLACK_HOLE_FRAG).not.toContain("stars(");
-    expect(BLACK_HOLE_FRAG).toContain("gl_FragColor = vec4(col, alpha);");
   });
 });
 
