@@ -390,6 +390,7 @@ struct UninstallView: View {
                 SweepButton(.danger, title: "卸载所选", systemImage: "trash") {
                     confirmUninstall = true
                 }
+                .pulseGlow(engine.loading, color: Theme.accentDanger)
                 .disabled(engine.selectedPaths.isEmpty || engine.loading)
             }
         }
@@ -507,6 +508,7 @@ struct UninstallView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(filtered.enumerated()), id: \.element.id) { index, app in
                         row(app)
+                            .staggerIn(index)
                         if index < filtered.count - 1 {
                             Rectangle().fill(Theme.border).frame(height: 1).padding(.leading, 40)
                         }

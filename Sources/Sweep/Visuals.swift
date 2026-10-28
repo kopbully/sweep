@@ -201,3 +201,73 @@ struct TickerText: View {
         .foregroundStyle(color)
     }
 }
+
+// MARK: - 列表行入场
+//
+// 按索引错开淡入 + 上移，让扫描结果「长出来」而不是一次性出现。
+// 只播一次：List/ForEach 复用行时重新 onAppear 不会重播。
+
+struct StaggerIn: ViewModifier {
+    var index: Int
+    var distance: CGFloat = 6
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : distance)
+            .onAppear {
+                guard !shown else { return }
+                guard !reduceMotion else { shown = true; return }
+                withAnimation(Motion.base.delay(Double(min(index, 24)) * 0.018)) { shown = true }
+            }
+    }
+}
+
+extension View {
+    func staggerIn(_ index: Int) -> some View { modifier(StaggerIn(index: index)) }
+}
+
+// MARK: - 忙碌呼吸
+//
+// 扫描/卸载进行中，给主按钮一层缓慢呼吸的光，替代转圈之外的第二重反馈。
+
+struct PulseGlow: ViewModifier {
+    var active: Bool
+    var color: Color
+    @State private var breathe = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .shadow(color: color.opacity(active ? (breathe ? 0.55 : 0.22) : 0),
+                    radius: active ? 12 : 0, x: 0, y: 0)
+            .onAppear { guard active, !reduceMotion else { return }; cycle() }
+            .onChangeCompat(value: active) { guard active, !reduceMotion else { withAnimation { breathe = false }; return }
+                cycle()
+            }
+    }
+
+    private func cycle() {
+        withAnimation(.easeInOut(duration: 1.25).repeatForever(autoreverses: true)) { breathe = true }
+    }
+}
+
+extension View {
+    func pulseGlow(_ active: Bool, color: Color = Theme.accent) -> some View {
+        modifier(PulseGlow(active: active, color: color))
+    }
+}
+
+/// macOS 13 只有 onChange(of:perform:)，这里统一成一处以免散落废弃警告
+extension View {
+    @ViewBuilder
+    func onChangeCompat(value: Bool, perform: @escaping () -> Void) -> some View {
+        if #available(macOS 14.0, *) {
+            self.onChange(of: value) { _, _ in perform() }
+        } else {
+            self.onChange(of: value) { _ in perform() }
+        }
+    }
+}

@@ -364,7 +364,10 @@ struct CleanView: View {
                             .frame(maxWidth: .infinity).padding(.vertical, 20)
                     }
                 }
-                ForEach(grouped, id: \.0) { category, items in categoryCard(category, items) }
+                ForEach(Array(grouped.enumerated()), id: \.element.0) { index, pair in
+                    categoryCard(pair.0, pair.1)
+                        .staggerIn(index)
+                }
             }
             .padding(Space.s300)
         }
@@ -521,6 +524,7 @@ struct CleanView: View {
                         confirmClean = true
                     }
                     .disabled(engine.busy)
+                    .pulseGlow(engine.busy)
                 }
                 Text(engine.selectedItems.isEmpty
                      ? "当前没有勾选项目：点主按钮会自动勾上全部可清理项，也可在下方逐项勾选。"

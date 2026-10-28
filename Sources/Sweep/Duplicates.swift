@@ -306,6 +306,7 @@ struct DuplicatesView: View {
                         SweepButton(.secondary, title: "停止", systemImage: "stop") { engine.cancel() }
                     } else {
                         SweepButton(.primary, title: "开始查找", systemImage: "doc.on.doc") { engine.scan() }
+                            .pulseGlow(engine.groups.isEmpty)
                     }
                 }
 
@@ -387,8 +388,9 @@ struct DuplicatesView: View {
                 }
             }
         } else {
-            ForEach(engine.groups) { group in
+            ForEach(Array(engine.groups.enumerated()), id: \.element.id) { index, group in
                 groupPanel(group)
+                    .staggerIn(index)
             }
         }
     }

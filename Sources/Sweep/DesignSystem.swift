@@ -623,24 +623,36 @@ struct SegmentedBar<Item: Hashable>: View {
     let items: [Item]
     let title: (Item) -> String
     @Binding var selection: Item
+    @Namespace private var pill
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: Space.s25) {
             ForEach(items, id: \.self) { item in
                 let active = item == selection
                 Button {
-                    withAnimation(Motion.quick) { selection = item }
+                    withAnimation(reduceMotion ? nil : Motion.quick) { selection = item }
                 } label: {
                     Text(title(item))
-                        .font(Typo.f(Typo.xs, .medium))
+                        .font(Typo.f(Typo.xs, active ? .semibold : .medium))
                         .foregroundStyle(active ? Theme.textPrimary : Theme.textSecondary)
                         .padding(.horizontal, Space.s100)
                         .padding(.vertical, Space.s50)
-                        .background(
-                            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                                .fill(active ? Theme.surface : Color.clear)
-                                .shadow(color: active ? Theme.shadow : .clear, radius: 2, y: 1)
-                        )
+                        .background {
+                            // 只给当前项挂几何标识，切换时胶囊会自己滑过去
+                            if active {
+                                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                                    .fill(LinearGradient(
+                                        colors: [Color.white, Theme.accentSoft],
+                                        startPoint: .top, endPoint: .bottom))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                                            .strokeBorder(Theme.accent.opacity(0.32), lineWidth: 0.5))
+                                    .shadow(color: Theme.accent.opacity(0.20), radius: 3, y: 1)
+                                    .matchedGeometryEffect(id: "segmented-pill", in: pill)
+                            }
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }

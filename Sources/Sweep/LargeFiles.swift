@@ -222,6 +222,7 @@ struct LargeFilesView: View {
                         SweepButton(.secondary, title: "停止", systemImage: "stop") { engine.cancel() }
                     } else {
                         SweepButton(.primary, title: "开始扫描", systemImage: "magnifyingglass") { engine.scan() }
+                            .pulseGlow(engine.items.isEmpty)
                     }
                 }
 
@@ -344,6 +345,7 @@ struct LargeFilesView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(engine.filtered.enumerated()), id: \.element.id) { index, item in
                         row(item)
+                            .staggerIn(index)
                         if index < engine.filtered.count - 1 {
                             Rectangle().fill(Theme.border).frame(height: 1).padding(.leading, 28)
                         }

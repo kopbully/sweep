@@ -259,6 +259,7 @@ struct AnalyzeView: View {
 
                 ForEach(Array(engine.entries.enumerated()), id: \.element.id) { index, entry in
                     entryRow(entry)
+                        .staggerIn(index)
                     if index < engine.entries.count - 1 {
                         Rectangle().fill(Theme.border).frame(height: 1).padding(.leading, Space.s100)
                     }
@@ -351,14 +352,8 @@ struct AnalyzeView: View {
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
             Spacer()
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Theme.surfaceHover)
-                    Capsule().fill(Theme.accent.opacity(0.7))
-                        .frame(width: max(geo.size.width * CGFloat(ratio), 3))
-                }
-            }
-            .frame(width: 150, height: 5)
+            ProgressBar(value: ratio, height: 5)
+                .frame(width: 150)
             Text(entry.size.bytesText)
                 .font(Typo.mono(Typo.xs, .medium))
                 .foregroundStyle(Theme.textSecondary)
