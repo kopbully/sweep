@@ -17,6 +17,7 @@ cp "$BINARY" "$APP/Contents/MacOS/Sweep"
 mkdir -p "$APP/Contents/Resources"
 ditto "Sources/Sweep/Resources/BlackHole" "$APP/Contents/Resources/BlackHole"
 ditto "Sources/Sweep/Resources/ThirdParty" "$APP/Contents/Resources/ThirdParty"
+[ -f "Sources/Sweep/Resources/AppIcon.icns" ] && cp "Sources/Sweep/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -30,13 +31,15 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key>
     <string>com.sweep.macos</string>
     <key>CFBundleVersion</key>
-    <string>0.6.6</string>
+    <string>0.7.0</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.6.6</string>
+    <string>0.7.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
     <string>Sweep</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>

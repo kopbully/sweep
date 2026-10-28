@@ -21,6 +21,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let instanceLock = SingleInstanceLock()
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // 只读/受控诊断：核对卸载模块的残留匹配与删除链路，见 UninstallDiagnostics
+        if let probe = ProcessInfo.processInfo.environment["SWEEP_UNINSTALL_PROBE"], !probe.isEmpty {
+            let apply = ProcessInfo.processInfo.environment["SWEEP_UNINSTALL_PROBE_APPLY"] == "1"
+            UninstallDiagnostics.run(appPath: probe, apply: apply)
+            exit(0)
+        }
         // 每个进程都会创建自己的桌面黑洞面板，第二个实例只会让桌面上多出一个
         // 重复的悬浮窗。这里只保留最先启动的进程，其余实例唤起已有窗口后退出。
         if ProcessInfo.processInfo.environment["SWEEP_ALLOW_MULTI_INSTANCE"] == "1" { return }
@@ -118,17 +124,8 @@ struct ShellView: View {
 
     private var brand: some View {
         HStack(spacing: Space.s100) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(LinearGradient(colors: [Color(hex: "#79BFFF"), Color(hex: "#3478F6")],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 40, height: 40)
-                    .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(.white.opacity(0.45)))
-                    .shadow(color: Theme.accent.opacity(0.22), radius: 6, y: 3)
-                Image(systemName: "wind")
-                    .font(.system(size: 21, weight: .medium))
-                    .foregroundStyle(Color.white)
-            }
+            // 图标自带 100/1024 的透明留白，取 46 让视觉尺寸落在 40pt
+            SweepLogo(size: 46)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Sweep")
                     .font(Typo.f(Typo.xl, .bold))
@@ -216,6 +213,7 @@ struct ShellView: View {
         case .optimize: OptimizeView()
         case .startup: StartupView()
         case .memory: MemoryView()
+        case .uninstall: UninstallView(engine: uninstallEngine)
         case .privacy: PrivacyView()
         case .history: HistoryView()
         }

@@ -582,6 +582,20 @@ struct Regression {
         check(found.first?.keeper?.path == dupOlder.path,
               "duplicate scan keeps the oldest copy of each group")
 
+        // MARK: 卸载：残留匹配
+        check(UninstallEngine.matches("com.foo.bar", bundleID: "com.foo.bar", baseName: "Foo"),
+              "uninstall matches the exact bundle id")
+        check(UninstallEngine.matches("com.foo.bar.plist", bundleID: "com.foo.bar", baseName: "Foo"),
+              "uninstall matches files named after the bundle id")
+        check(UninstallEngine.matches("Foo.savedState", bundleID: "com.foo.bar", baseName: "Foo"),
+              "uninstall matches app-name folders that continue after a separator")
+        check(!UninstallEngine.matches("FooShadow", bundleID: "com.foo.bar", baseName: "Foo"),
+              "uninstall refuses a folder that merely shares the name prefix")
+        check(!UninstallEngine.matches("com.foo.barley", bundleID: "com.foo.bar", baseName: "Foo"),
+              "uninstall refuses a bundle id that merely shares a prefix")
+        check(!UninstallEngine.matches("Others", bundleID: "", baseName: "Ot"),
+              "uninstall ignores names shorter than three characters")
+
         // MARK: 模块分组
         let grouped = ModuleGroup.all.flatMap(\.modules)
         check(grouped.count == Module.allCases.count && Set(grouped) == Set(Module.allCases),

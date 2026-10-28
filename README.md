@@ -1,6 +1,6 @@
 # Sweep — 安静的 macOS 空间管家
 
-参考 [Nivo](https://app.nivoclean.com)（Mole CLI 的商业壳）的产品思路，用 **Swift + SwiftUI** 做的一个本地原生桌面应用。十个模块分三组：
+参考 [Nivo](https://app.nivoclean.com)（Mole CLI 的商业壳）的产品思路，用 **Swift + SwiftUI** 做的一个本地原生桌面应用。十一个模块分四组：
 
 | 模块 | 功能 |
 |------|------|
@@ -12,6 +12,7 @@
 | **优化 Optimize** | 6 个维护任务：DNS 刷新、Quick Look 缩略图清理、旧日志修剪、清空废纸篓、下载目录安装包清理、系统日志修剪。 |
 | **启动项 Startup** | 扫描三个 LaunchAgents/LaunchDaemons 目录，用户级可停用与恢复，系统级只读。 |
 | **内存 Memory** | 应用/联动/压缩/交换内存构成、压力等级、进程占用排行；「整理可回收内存」调用系统 purge（需管理员密码）。 |
+| **卸载 Uninstall** | 列出 `/Applications` 与 `~/Applications`（含 Utilities 一层子目录）的应用与体积，按 Bundle ID／应用名找出散落在 `~/Library` 的残留，本体与残留一起进废纸篓；目录不可写的装机应用会请求一次管理员授权，界面上提前说明这一步不可恢复。Sweep 自己不会出现在清单里。 |
 | **隐私清理 Privacy** | 浏览器缓存、历史、Cookie，以及最近使用、崩溃报告、Shell 历史、剪贴板；按「安全 / 丢记录 / 会退出登录」分级。 |
 | **操作历史 History** | 每次删除与系统改动写入结构化 `history.jsonl`，界面同时解析旧版日志，按天分组、按类型筛选、可导出 CSV。 |
 
@@ -27,6 +28,15 @@ open Sweep.app
 ```
 
 要求：macOS 13+，Apple Command Line Tools（无需完整 Xcode）。
+
+## 0.7.0 应用图标 · 卸载模块
+
+- **自带图标**：`IconArt.swift` 是唯一的几何来源——824×824 内容区、0.2255 圆角（对齐 macOS 图标模板）、一条自左下笔尖收细到右上圆头的“清扫弧”。`Scripts/make_icon.swift` 用它渲染 10 档尺寸交给 `iconutil` 出 `AppIcon.icns`，侧边栏的 `SweepLogo` 用同一份路径在 SwiftUI Canvas 里画，改一处两边一起变。`make_app.sh` 负责把 icns 塞进 bundle 并写 `CFBundleIconFile`。
+- **底板踩过的坑**：先用超椭圆（n=5）做底板，NSWorkspace 解析出来的图标会被系统套上一层灰色“应用底板”，蓝底缩到 54%；换成系统模板的圆角比例后恢复正常。锥形笔画最初用“整条子路径 + nonzero 填充”，圆头与笔画绕向相反，重叠处被挖空——现在按子路径分别填充。
+- **卸载模块接进界面**：`Uninstall.swift` 早就写好了，但只在 `ShellView` 里 `@StateObject` 了一个没人用的 `UninstallEngine`，所以侧栏看不到入口。现在 `Module.uninstall` 挂在新建的「应用」组下，渲染 `UninstallView`。
+- **残留匹配收紧**：旧版用 `kid.contains(baseName)` 判匹配，`Code` 会命中 `Code Cache` 这类无辜目录。现在 Bundle ID 走精确或 `.`/`-` 分段，应用名只接受完全同名或以 `.`、空格、`-`、`_` 续写；0 字节的空目录/空 plist 也计入残留（留着比清掉更碍事）。
+- **结果说清楚**：能进废纸篓的写“可恢复”，走管理员删除的单独说明“已永久删除”，失败项点名；每次卸载写一条 `kind=uninstall` 的历史记录。
+- **验证**：`Scripts/test.sh` 149 项通过（新增 6 项匹配规则断言）；用一个假应用 `~/Applications/SweepTestApp.app` 与 5 份残留跑通端到端，诱饵目录 `SweepTestAppShadow` 未被误删。见 `verification/uninstall-0.7.0.md`。
 
 ## 0.6.6 家目录之外的大块占用（磁盘占满的真凶）
 

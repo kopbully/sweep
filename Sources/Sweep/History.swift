@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 // MARK: - 结构化操作记录
 
 enum OperationKind: String, CaseIterable, Identifiable {
-    case clean, trash, delete, optimize, privacy, duplicate, largeFile, startup, memory, system
+    case clean, trash, delete, optimize, privacy, duplicate, largeFile, startup, memory, uninstall, system
 
     var id: String { rawValue }
 
@@ -20,6 +20,7 @@ enum OperationKind: String, CaseIterable, Identifiable {
         case .largeFile: return "大文件"
         case .startup: return "启动项"
         case .memory: return "内存"
+        case .uninstall: return "应用卸载"
         case .system: return "其他"
         }
     }
@@ -35,6 +36,7 @@ enum OperationKind: String, CaseIterable, Identifiable {
         case .largeFile: return "doc.zipper"
         case .startup: return "power"
         case .memory: return "memorychip"
+        case .uninstall: return "xmark.bin"
         case .system: return "info.circle"
         }
     }
