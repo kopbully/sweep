@@ -136,7 +136,7 @@ final class UninstallEngine: ObservableObject {
             path: full,
             bundleID: bundleID,
             version: version,
-            size: Sizer.size(full),
+            size: Sizer.footprint(full),
             lastModified: modified,
             needsAuth: !writable
         )
@@ -183,7 +183,7 @@ final class UninstallEngine: ObservableObject {
                 let full = dir + "/" + kid
                 guard seen.insert(full).inserted else { continue }
                 // 0 字节的空目录/空 plist 也算残留：留着比清掉更碍事
-                found.append(AppObject(path: full, size: Sizer.sizeIfPresent(full)))
+                found.append(AppObject(path: full, size: Sizer.footprint(full)))
             }
         }
         return found.sorted { $0.size > $1.size }

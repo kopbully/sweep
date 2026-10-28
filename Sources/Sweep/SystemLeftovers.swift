@@ -72,7 +72,7 @@ enum SystemLeftovers {
     static func scan(tempDirectory: String = NSTemporaryDirectory()) -> [SystemLeftover] {
         locations(tempDirectory: tempDirectory).compactMap { item in
             var measured = item
-            let size = Sizer.sizeIfPresent(item.path)
+            let size = Sizer.footprint(item.path)
             guard size > 0 else { return nil }
             measured.size = size
             return measured

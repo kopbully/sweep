@@ -164,18 +164,32 @@ enum Sizer {
         let inode: ino_t
     }
 
-    /// 递归计算大小；不跟随符号链接；聚合硬链接不重复计入同一顶层树内
-    static func size(_ path: String) -> Int64 {
+    /// 一次遍历同时得到的两种口径
+    ///
+    /// `logical` 是文件内容长度之和（st_size）；`allocated` 是实际占用的磁盘块
+    /// （st_blocks × 512，与 `du` 同一口径）。稀疏文件、APFS 克隆、压缩文件
+    /// 会让两者相差极大——Docker 的 Docker.raw 逻辑 228 GB、实际只占 0.23 GB，
+    /// 拿逻辑值当"占用"会把一个目录虚报成比整块盘还大。
+    struct Measure {
+        var logical: Int64 = 0
+        var allocated: Int64 = 0
+    }
+
+    /// 递归测量；不跟随符号链接；同一顶层树内硬链接只计一次
+    static func measure(_ path: String) -> Measure {
         let root = (path as NSString).standardizingPath
         var rootStat = stat()
-        guard lstat(root, &rootStat) == 0 else { return 0 }
+        guard lstat(root, &rootStat) == 0 else { return Measure() }
         let kind = rootStat.st_mode & S_IFMT
-        if kind == S_IFREG { return Int64(rootStat.st_size) }
-        guard kind == S_IFDIR else { return 0 }
+        if kind == S_IFREG {
+            return Measure(logical: Int64(rootStat.st_size),
+                           allocated: Int64(rootStat.st_blocks) * 512)
+        }
+        guard kind == S_IFDIR else { return Measure() }
         guard let en = FileManager.default.enumerator(at: URL(fileURLWithPath: root),
                                                       includingPropertiesForKeys: [],
-                                                      options: []) else { return 0 }
-        var total: Int64 = 0
+                                                      options: []) else { return Measure() }
+        var measure = Measure(allocated: Int64(rootStat.st_blocks) * 512)
         var seenInodes = Set<FileIdentity>()
         for case let url as URL in en {
             var st = stat()
@@ -184,9 +198,25 @@ enum Sizer {
                 let identity = FileIdentity(device: st.st_dev, inode: st.st_ino)
                 if !seenInodes.insert(identity).inserted { continue }
             }
-            total += Int64(st.st_size)
+            measure.logical += Int64(st.st_size)
+            measure.allocated += Int64(st.st_blocks) * 512
         }
-        return total
+        return measure
+    }
+
+    /// 递归逻辑大小（若路径不存在返回 0）
+    static func size(_ path: String) -> Int64 {
+        measure(path).logical
+    }
+
+    /// 递归实际占用（若路径不存在返回 0）
+    static func allocated(_ path: String) -> Int64 {
+        measure(path).allocated
+    }
+
+    /// 同上，语义更明确：界面上凡是「占多少空间 / 能腾出多少」都取这个值
+    static func footprint(_ path: String) -> Int64 {
+        measure(path).allocated
     }
 
     /// 目录的递归大小（若路径不存在返回 0）

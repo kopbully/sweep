@@ -614,6 +614,47 @@ struct Regression {
         check(leftovers.allSatisfy { $0.path.hasPrefix("/") },
               "system leftover paths stay absolute so they can be shown verbatim")
 
+        // MARK: 稀疏文件：占用必须按磁盘块算，不能按逻辑长度算
+        //
+        // 实测教训：~/Library 里 Docker.raw 逻辑 228 GB、实际 0.23 GB，
+        // 按 st_size 统计会让一个子目录虚报成比整块盘还大。
+        let sparseRoot = NSTemporaryDirectory() + "sweep-sparse-\(UUID().uuidString)"
+        try? FileManager.default.createDirectory(atPath: sparseRoot, withIntermediateDirectories: true)
+        let sparseFile = sparseRoot + "/sparse.raw"
+        let logical: Int64 = 512 * 1024 * 1024
+        if let handle = fopen(sparseFile, "w") {
+            ftruncate(fileno(handle), logical)
+            fclose(handle)
+        }
+        let sparseMeasure = Sizer.measure(sparseFile)
+        check(sparseMeasure.logical == logical, "sparse file keeps its logical length")
+        check(sparseMeasure.allocated < logical / 4,
+              "sparse file is measured by allocated blocks, not logical length")
+
+        let dirMeasure = Sizer.measure(sparseRoot)
+        check(dirMeasure.allocated < dirMeasure.logical / 4,
+              "directory footprint uses allocated blocks")
+        check(Sizer.footprint(sparseRoot) == dirMeasure.allocated,
+              "footprint equals the allocated measure")
+        check(Sizer.size(sparseRoot) == dirMeasure.logical,
+              "size still reports the logical measure")
+
+        // 纯稀疏文件占用就是 0，不能回退成逻辑长度
+        let hollow = DiskEntry(id: "hollow", name: "hollow", path: "hollow",
+                               size: logical, allocated: 0, isDirectory: false)
+        check(hollow.footprint == 0, "fully sparse entry reports zero footprint")
+        check(hollow.isInflated, "fully sparse entry is flagged as inflated")
+
+        let dense = DiskEntry(id: "dense", name: "dense", path: "dense",
+                              size: 1000, allocated: 1000, isDirectory: false)
+        let sparseEntry = DiskEntry(id: "sparse", name: "sparse", path: "sparse",
+                                    size: 999_999, allocated: 10, isDirectory: false)
+        check([sparseEntry, dense].sorted { $0.footprint > $1.footprint }.first?.id == "dense",
+              "footprint ordering is not misled by logical length")
+        check(!dense.isInflated, "ordinary file is not flagged as inflated")
+
+        try? FileManager.default.removeItem(atPath: sparseRoot)
+
         print("\(checks - failures)/\(checks) checks passed")
         if failures > 0 { exit(1) }
     }

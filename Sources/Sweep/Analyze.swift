@@ -7,8 +7,22 @@ struct DiskEntry: Identifiable, Hashable {
     let id: String            // = path
     let name: String
     let path: String
+    /// 逻辑长度（文件内容之和），稀疏文件会把这个值抬得很高
     let size: Int64
+    /// 实际占用的磁盘块，与 `du` 同口径
+    let allocated: Int64
     let isDirectory: Bool
+
+    /// 真正吃掉的空间。界面上一律以它为准。
+    ///
+    /// 纯稀疏文件 `allocated` 就是 0，此时不能回退到逻辑长度——那正是要修的错误。
+    var footprint: Int64 { allocated }
+
+    /// 逻辑长度比实际占用多出来的部分：稀疏文件、APFS 克隆、压缩文件
+    var inflated: Int64 { max(size - allocated, 0) }
+
+    /// 虚高到值得提示（多出 512 MB 以上，或逻辑长度至少是占用的两倍）
+    var isInflated: Bool { inflated >= 536_870_912 && size >= allocated * 2 }
 }
 
 enum DiskLens: String, CaseIterable, Identifiable {
@@ -30,6 +44,8 @@ final class AnalyzeEngine: ObservableObject {
     @Published var entries: [DiskEntry] = []
     @Published var scanning = false
     @Published var totalScannedSize: Int64 = 0
+    /// 本层实际占用（du 口径），与 totalScannedSize 的逻辑长度并列
+    @Published var footprintScannedSize: Int64 = 0
     @Published var trail: [String] = [NSHomeDirectory()]
     /// 逐层缓存，旭日图需要上级层的数据
     @Published var cache: [String: [DiskEntry]] = [:]
@@ -46,6 +62,7 @@ final class AnalyzeEngine: ObservableObject {
         }
         entries = []
         totalScannedSize = 0
+        footprintScannedSize = 0
         DispatchQueue.global(qos: .userInitiated).async {
             let fm = FileManager.default
             var result: [DiskEntry] = []
@@ -59,25 +76,31 @@ final class AnalyzeEngine: ObservableObject {
                 .sorted()
                 .map { "\(root.hasSuffix("/") ? String(root.dropLast()) : root)/\($0)" }
             let lock = NSLock()
+            var foot: Int64 = 0
             DispatchQueue.concurrentPerform(iterations: fullPaths.count) { i in
                 let p = fullPaths[i]
                 var st = stat()
                 guard lstat(p, &st) == 0 else { return }
                 let isDir = (st.st_mode & S_IFMT) == S_IFDIR
-                let size: Int64 = isDir ? Sizer.size(p) : Int64(st.st_size)
+                // 稀疏文件（Docker.raw 这类）逻辑长度可达实际占用的上千倍，
+                // 两种口径都取，界面以实际占用为准。
+                let m = Sizer.measure(p)
                 lock.lock()
                 result.append(DiskEntry(id: p,
                                         name: (p as NSString).lastPathComponent,
                                         path: p,
-                                        size: size,
+                                        size: m.logical,
+                                        allocated: m.allocated,
                                         isDirectory: isDir))
-                total += size
+                total += m.logical
+                foot += m.allocated
                 lock.unlock()
             }
-            let sorted = result.sorted { $0.size > $1.size }
+            let sorted = result.sorted { $0.footprint > $1.footprint }
             DispatchQueue.main.async {
                 self.entries = sorted
                 self.totalScannedSize = total
+                self.footprintScannedSize = foot
                 self.cache[root] = sorted
                 self.scanning = false
             }
@@ -202,7 +225,7 @@ struct AnalyzeView: View {
                 .frame(maxWidth: 420)
 
                 Spacer()
-                Tag(text: "本层合计 \(engine.totalScannedSize.bytesText)", tone: .neutral)
+                Tag(text: "本层占用 \(engine.footprintScannedSize.bytesText)", tone: .neutral)
             }
         }
     }
@@ -300,8 +323,8 @@ struct AnalyzeView: View {
     }
 
     private var legend: some View {
-        let total = engine.entries.reduce(Int64(0)) { $0 + max($1.size, 0) }
-        let top = Array(engine.entries.sorted { $0.size > $1.size }.prefix(8))
+        let total = engine.entries.reduce(Int64(0)) { $0 + max($1.footprint, 0) }
+        let top = Array(engine.entries.sorted { $0.footprint > $1.footprint }.prefix(8))
         return VStack(alignment: .leading, spacing: Space.s75) {
             Text("当前层构成").font(Typo.f(Typo.xs, .medium)).foregroundStyle(Theme.textSecondary)
             ForEach(Array(top.enumerated()), id: \.element.id) { index, entry in
@@ -315,10 +338,10 @@ struct AnalyzeView: View {
                             .foregroundStyle(Theme.textPrimary)
                             .lineLimit(1)
                         Spacer(minLength: Space.s100)
-                        Text(total > 0 ? ratioText(Double(entry.size) / Double(total)) : "—")
+                        Text(total > 0 ? ratioText(Double(entry.footprint) / Double(total)) : "—")
                             .font(Typo.mono(Typo.xs))
                             .foregroundStyle(Theme.textMuted)
-                        Text(entry.size.sizeText)
+                        Text(entry.footprint.sizeText)
                             .font(Typo.mono(Typo.xs, .medium))
                             .foregroundStyle(Theme.textSecondary)
                             .frame(width: 76, alignment: .trailing)
@@ -340,8 +363,8 @@ struct AnalyzeView: View {
     }
 
     private func entryRow(_ entry: DiskEntry) -> some View {
-        let topSize = max(engine.entries.first?.size ?? 1, 1)
-        let ratio = Double(entry.size) / Double(topSize)
+        let topSize = max(engine.entries.first?.footprint ?? 1, 1)
+        let ratio = Double(entry.footprint) / Double(topSize)
         return HStack(spacing: Space.s100) {
             Image(systemName: entry.isDirectory ? "folder" : "doc")
                 .font(Typo.f(Typo.xs))
@@ -354,10 +377,20 @@ struct AnalyzeView: View {
             Spacer()
             ProgressBar(value: ratio, height: 5)
                 .frame(width: 150)
-            Text(entry.size.bytesText)
-                .font(Typo.mono(Typo.xs, .medium))
-                .foregroundStyle(Theme.textSecondary)
-                .frame(width: 84, alignment: .trailing)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(entry.footprint.bytesText)
+                    .font(Typo.mono(Typo.xs, .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                if entry.isInflated {
+                    Text("逻辑 \(entry.size.sizeText)")
+                        .font(Typo.mono(Typo.xs))
+                        .foregroundStyle(Theme.textMuted)
+                }
+            }
+            .frame(width: 84, alignment: .trailing)
+            .help(entry.isInflated
+                  ? "实际占用 \(entry.footprint.bytesText)；逻辑长度 \(entry.size.bytesText)，差额来自稀疏或克隆文件"
+                  : "实际占用 \(entry.footprint.bytesText)")
             if entry.isDirectory {
                 SweepButton(.quiet, title: "进入") { engine.go(to: entry.path) }
             }

@@ -74,7 +74,10 @@ struct TreemapTile: Identifiable {
     let id: String
     let entry: DiskEntry?
     let label: String
+    /// 实际占用：块面积与显示都以它为准
     let size: Int64
+    /// 逻辑长度比实际占用多出的部分（稀疏文件），只用于提示
+    let inflated: Int64
     let rect: CGRect
 }
 
@@ -111,14 +114,20 @@ struct TreemapView: View {
     private var signature: String { "\(entries.count)-\(entries.first?.path ?? "")" }
 
     private var baseTiles: [TreemapTile] {
-        let sorted = entries.filter { $0.size > 0 }.sorted { $0.size > $1.size }
+        // 纯稀疏条目占用为 0，也要留在图里（面积按最小权重给一点），否则会凭空消失
+        let sorted = entries.filter { $0.size > 0 || $0.footprint > 0 }
+            .sorted { $0.footprint > $1.footprint }
         let head = Array(sorted.prefix(24))
         let tail = sorted.dropFirst(24)
-        var out = head.map { TreemapTile(id: $0.id, entry: $0, label: $0.name, size: $0.size, rect: .zero) }
+        var out = head.map {
+            TreemapTile(id: $0.id, entry: $0, label: $0.name,
+                        size: $0.footprint, inflated: $0.inflated, rect: .zero)
+        }
         if !tail.isEmpty {
             out.append(TreemapTile(id: "__rest", entry: nil,
                                    label: "其他 \(tail.count) 项",
-                                   size: tail.reduce(Int64(0)) { $0 + $1.size },
+                                   size: tail.reduce(Int64(0)) { $0 + $1.footprint },
+                                   inflated: tail.reduce(Int64(0)) { $0 + $1.inflated },
                                    rect: .zero))
         }
         return out
@@ -178,7 +187,9 @@ struct TreemapView: View {
         .onTapGesture {
             if let entry = tile.entry { onSelect(entry) }
         }
-        .help("\(tile.label) · \(tile.size.bytesText)")
+        .help(tile.inflated > 0
+              ? "\(tile.label) · 占用 \(tile.size.bytesText)（逻辑长度 \((tile.size + tile.inflated).bytesText)）"
+              : "\(tile.label) · \(tile.size.bytesText)")
         .animation(reduceMotion ? .none : Motion.quick, value: hovered)
         .animation(reduceMotion ? .none : Motion.base.delay(Double(min(index, 20)) * 0.02),
                    value: appeared)
@@ -227,7 +238,10 @@ struct SunburstSegment: Identifiable {
     let id: String
     let entry: DiskEntry?
     let label: String
+    /// 实际占用
     let size: Int64
+    /// 逻辑长度比实际占用多出的部分
+    let inflated: Int64
     let start: Double
     let end: Double
     let ring: Int
@@ -245,17 +259,18 @@ struct SunburstView: View {
     private var segments: [SunburstSegment] {
         var out: [SunburstSegment] = []
         for (ringIndex, level) in levels.enumerated() {
-            let total = level.reduce(Int64(0)) { $0 + max($1.size, 0) }
+            let total = level.reduce(Int64(0)) { $0 + max($1.footprint, 0) }
             guard total > 0 else { continue }
             var angle = -90.0
-            for (order, entry) in level.sorted(by: { $0.size > $1.size }).enumerated() {
-                let span = 360.0 * Double(entry.size) / Double(total)
+            for (order, entry) in level.sorted(by: { $0.footprint > $1.footprint }).enumerated() {
+                let span = 360.0 * Double(entry.footprint) / Double(total)
                 let gap = span > 1.2 ? 0.6 : 0
                 out.append(SunburstSegment(
                     id: "\(ringIndex)-\(entry.id)",
                     entry: entry,
                     label: entry.name,
-                    size: entry.size,
+                    size: entry.footprint,
+                    inflated: entry.inflated,
                     start: angle + gap / 2,
                     end: angle + span - gap / 2,
                     ring: ringIndex,
@@ -298,7 +313,9 @@ struct SunburstView: View {
                     .onTapGesture {
                         if let entry = segment.entry { onSelect(entry) }
                     }
-                    .help("\(segment.label) · \(segment.size.bytesText)")
+                    .help(segment.inflated > 0
+                          ? "\(segment.label) · 占用 \(segment.size.bytesText)（逻辑长度 \((segment.size + segment.inflated).bytesText)）"
+                          : "\(segment.label) · \(segment.size.bytesText)")
                     .animation(reduceMotion ? .none : Motion.quick, value: hovered)
             }
             center
@@ -309,7 +326,7 @@ struct SunburstView: View {
     }
 
     private var center: some View {
-        let total = levels.last?.reduce(Int64(0)) { $0 + max($1.size, 0) } ?? 0
+        let total = levels.last?.reduce(Int64(0)) { $0 + max($1.footprint, 0) } ?? 0
         let item = hoveredSegment
         let value = item?.size ?? total
         let share = item != nil && total > 0 ? Double(item!.size) / Double(total) : nil

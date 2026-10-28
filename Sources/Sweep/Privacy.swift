@@ -207,7 +207,7 @@ final class PrivacyEngine: ObservableObject {
                 items.map { item -> (PrivacyItem, Int64) in
                     var total: Int64 = 0
                     for path in item.paths {
-                        total += Sizer.sizeIfPresent(path)
+                        total += Sizer.footprint(path)
                     }
                     return (item, total)
                 }
