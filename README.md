@@ -29,6 +29,16 @@ open Sweep.app
 
 要求：macOS 13+，Apple Command Line Tools（无需完整 Xcode）。
 
+## 0.7.1 界面：磨砂玻璃 + 环境光
+
+- **面板换成玻璃**：`Panel` 从实色白改成 `ultraThinMaterial` + 0.55 透明度的自适应底色，底下的环境光能透上来，文字对比度靠自己那层实色兜住。描边是左上偏蓝、右下回灰的渐变，比一圈死灰线更像“有光打过来”。统计和主操作卡片加 `lift: true`，悬停时抬 1.5pt、阴影加深。
+- **环境光**：`AmbientBackdrop` 在内容区底下铺三团蓝/青/紫雾，14–22 秒挪一次位置（浅色 0.16–0.30，深色 0.26–0.40）。为了让它看得见，各页自带的 `.background(Theme.bg)` 全部撤掉，底色统一由外壳提供。
+- **侧栏选中态**：换成渐变胶囊 + 内描边 + 顶部高光 + 蓝色投影；未选中行悬停时图标转成强调色。
+- **图表**：`Sparkline` 加渐变面积、一层模糊描边的外发光和末点光点；`GaugeRing` 改成角向渐变 + 发光 + 数值过渡；`ProgressBar` 渐变填充 + 半高发光（原先 0.9 倍高度的发光会把下方说明文字糊掉）。
+- **细节**：主视觉徽标换成渐变方块 + 白色图标 + 周期性高光扫过；清理页的大数字改成蓝色渐变；`MetricTile` / `MetricSummary` 走 `TickerText`（macOS 14+ 有数字滚动过渡）；骨架屏从呼吸改成扫光；空状态图标背后加两圈缓慢扩散的呼吸光晕；工具栏底边换成一束慢慢游走的高光。
+- 全部动效都遵守 `accessibilityReduceMotion`，关掉“减弱动态”就静止。
+- 回归 149/149。界面截图见 `verification/ui-glass-clean.png`、`ui-glass-status.png`、`ui-glass-uninstall.png`。
+
 ## 0.7.0 应用图标 · 卸载模块
 
 - **自带图标**：`IconArt.swift` 是唯一的几何来源——824×824 内容区、0.2255 圆角（对齐 macOS 图标模板）、一条自左下笔尖收细到右上圆头的“清扫弧”。`Scripts/make_icon.swift` 用它渲染 10 档尺寸交给 `iconutil` 出 `AppIcon.icns`，侧边栏的 `SweepLogo` 用同一份路径在 SwiftUI Canvas 里画，改一处两边一起变。`make_app.sh` 负责把 icns 塞进 bundle 并写 `CFBundleIconFile`。

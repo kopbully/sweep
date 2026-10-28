@@ -358,7 +358,6 @@ struct StatusView: View {
             guard !Task.isCancelled else { return }
             if scenePhase == .background { sampler.stop() } else { sampler.start() }
         }
-        .background(Theme.bg)
     }
 
     private var healthRow: some View {

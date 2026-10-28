@@ -347,7 +347,6 @@ struct UninstallView: View {
             }
             .padding(Space.s300)
         }
-        .background(Theme.bg)
         .onAppear { if engine.apps.isEmpty && !engine.loading { engine.load() } }
         .alert("确认卸载？", isPresented: $confirmUninstall) {
             Button("卸载所选", role: .destructive) { engine.uninstallSelected() }
@@ -369,14 +368,17 @@ struct UninstallView: View {
     // MARK: 顶部统计与操作
 
     private var controls: some View {
-        Panel {
-            HStack(alignment: .center, spacing: Space.s200) {
-                MetricSummary(title: "已装应用", value: "\(engine.apps.count) 个")
-                Rectangle().fill(Theme.border).frame(width: 1, height: 26)
-                MetricSummary(title: "合计占用", value: engine.installedTotal.sizeText)
-                Rectangle().fill(Theme.border).frame(width: 1, height: 26)
-                MetricSummary(title: "已选", value: "\(engine.selectedPaths.count) 个 · \(engine.totalSelected.sizeText)")
+        Panel(lift: true) {
+            HStack(alignment: .center, spacing: Space.s300) {
+                selectionGauge
+
+                Rectangle().fill(Theme.border).frame(width: 1, height: 30)
+
+                metric(title: "已装应用", value: "\(engine.apps.count) 个")
+                metric(title: "合计占用", value: engine.installedTotal.sizeText)
+
                 Spacer(minLength: Space.s200)
+
                 SweepButton(.quiet, title: "全选", systemImage: "checkmark.circle") {
                     engine.selectAll(filtered)
                 }
@@ -391,6 +393,40 @@ struct UninstallView: View {
                 .disabled(engine.selectedPaths.isEmpty || engine.loading)
             }
         }
+    }
+
+    private func metric(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: Space.s25) {
+            Text(title)
+                .font(Typo.f(Typo.xs))
+                .foregroundStyle(Theme.textSecondary)
+            TickerText(text: value, font: Typo.f(Typo.sm, .semibold), color: Theme.textPrimary)
+        }
+        .fixedSize()
+    }
+
+    /// 已选占比：一圈渐变环 + 数字，比单行文字更能看出“要清掉多少”
+    private var selectionGauge: some View {
+        let ratio = engine.installedTotal > 0
+            ? Double(engine.totalSelected) / Double(engine.installedTotal) : 0
+        return HStack(spacing: Space.s100) {
+            ZStack {
+                GaugeRing(value: ratio, color: Theme.accent, lineWidth: 4.5)
+                    .frame(width: 38, height: 38)
+                Text("\(Int((ratio * 100).rounded()))%")
+                    .font(Typo.f(Typo.xs, .semibold).monospacedDigit())
+                    .foregroundStyle(ratio > 0 ? Theme.textPrimary : Theme.textMuted)
+            }
+            VStack(alignment: .leading, spacing: Space.s25) {
+                Text("已选")
+                    .font(Typo.f(Typo.xs))
+                    .foregroundStyle(Theme.textSecondary)
+                TickerText(text: "\(engine.selectedPaths.count) 个 · \(engine.totalSelected.sizeText)",
+                           font: Typo.f(Typo.sm, .semibold),
+                           color: Theme.textPrimary)
+            }
+        }
+        .fixedSize()
     }
 
     private func resultPanel(_ message: String) -> some View {
@@ -493,6 +529,8 @@ struct UninstallView: View {
             Image(nsImage: NSWorkspace.shared.icon(forFile: app.path))
                 .resizable()
                 .frame(width: 26, height: 26)
+                .scaleEffect(selected ? 1.06 : 1)
+                .animation(Motion.quick, value: selected)
 
             VStack(alignment: .leading, spacing: Space.s25) {
                 HStack(spacing: Space.s75) {

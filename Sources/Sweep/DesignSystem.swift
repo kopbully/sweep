@@ -231,8 +231,8 @@ private struct SweepButtonStyle: ButtonStyle {
                     .strokeBorder(borderColor, lineWidth: 1)
             )
             .contentShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-            .shadow(color: kind == .primary && enabled ? Theme.accent.opacity(0.16) : .clear,
-                    radius: 4, y: 2)
+            .shadow(color: kind == .primary && enabled ? Theme.accent.opacity(hovering ? 0.38 : 0.18) : .clear,
+                    radius: hovering ? 10 : 4, y: hovering ? 3 : 2)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .opacity(enabled ? 1 : 0.55)
             .animation(reduceMotion ? .none : Motion.quick, value: hovering)
@@ -293,12 +293,19 @@ extension SweepButton where Label == HStack<TupleView<(Image, Text)>> {
 // MARK: - 容器与标题
 
 /// 统一内容面板：与玻璃侧栏分层的清晰阅读表面。
+/// 表面留一点点通透（0.94），让底下的环境光在页边泛出来；描边是左上偏蓝的渐变，
+/// 比一圈死灰线更有一点“受光”的感觉。`lift` 用在统计与主操作卡片上，悬停时抬起来。
 struct Panel<Content: View>: View {
     var padding: CGFloat = Space.s200
+    var lift: Bool = false
     @ViewBuilder let content: () -> Content
 
-    init(padding: CGFloat = Space.s200, @ViewBuilder content: @escaping () -> Content) {
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(padding: CGFloat = Space.s200, lift: Bool = false, @ViewBuilder content: @escaping () -> Content) {
         self.padding = padding
+        self.lift = lift
         self.content = content
     }
 
@@ -306,13 +313,35 @@ struct Panel<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) { content() }
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.surface)
+            .background(
+                ZStack {
+                    // 磨砂底 + 一层自适应实色，兼顾通透和文字对比度
+                    RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                    RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+                        .fill(Theme.surface.opacity(0.55))
+                    if lift {
+                        RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+                            .fill(LinearGradient(
+                                colors: [Theme.accent.opacity(hovering ? 0.09 : 0.03), .clear],
+                                startPoint: .topLeading, endPoint: .bottomTrailing))
+                    }
+                }
+            )
             .clipShape(RoundedRectangle(cornerRadius: Radius.xl, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
-                    .strokeBorder(Theme.border, lineWidth: 1)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [Theme.accent.opacity(lift && hovering ? 0.35 : 0.18),
+                                     Theme.border, Theme.border],
+                            startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1)
             )
-            .shadow(color: Theme.shadow, radius: 10, y: 3)
+            .shadow(color: Theme.shadow, radius: hovering && lift ? 18 : 10, y: hovering && lift ? 8 : 3)
+            .offset(y: hovering && lift ? -1.5 : 0)
+            .onHover { hovering = $0 }
+            .animation(reduceMotion ? .none : Motion.quick, value: hovering)
     }
 }
 
@@ -425,9 +454,7 @@ struct MetricTile: View {
             Text(title)
                 .font(Typo.f(Typo.xs))
                 .foregroundStyle(Theme.textSecondary)
-            Text(value)
-                .font(Typo.f(Typo.xxl, .semibold).monospacedDigit())
-                .foregroundStyle(tone)
+            TickerText(text: value, font: Typo.f(Typo.xxl, .semibold), color: tone)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             if let caption {
@@ -442,6 +469,15 @@ struct MetricTile: View {
         .background(
             RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
                 .fill(Theme.surfaceRaised)
+                .overlay(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                        .fill(LinearGradient(colors: [tone.opacity(0.10), .clear],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing))
+                }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                .strokeBorder(tone.opacity(0.12), lineWidth: 1)
         )
     }
 }
@@ -456,11 +492,18 @@ struct ProgressBar: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(Theme.surfaceHover)
                 Capsule()
-                    .fill(color)
+                    .fill(
+                        LinearGradient(
+                            colors: [color.opacity(0.65), color],
+                            startPoint: .leading, endPoint: .trailing)
+                    )
                     .frame(width: max(geo.size.width * CGFloat(min(max(value, 0), 1)), value > 0 ? 4 : 0))
+                    // 只留一层薄薄的外发光，半径过半就把下方的说明文字糊住了
+                    .shadow(color: color.opacity(0.28), radius: max(1.5, height * 0.5), x: 0, y: 0)
             }
         }
         .frame(height: height)
+        .animation(Motion.base, value: value)
     }
 }
 
@@ -483,7 +526,13 @@ struct EmptyState<Action: View>: View {
                 .font(.system(size: 25, weight: .light))
                 .foregroundStyle(Theme.accent)
                 .frame(width: 60, height: 60)
-                .background(RoundedRectangle(cornerRadius: Radius.xl).fill(Theme.accentSoft))
+                .background(
+                    ZStack {
+                        PulseHalo()
+                        RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+                            .fill(Theme.accentSoft)
+                    }
+                )
                 .padding(.bottom, Space.s50)
             Text(title)
                 .font(Typo.f(Typo.base, .semibold))
@@ -501,25 +550,33 @@ struct EmptyState<Action: View>: View {
     }
 }
 
-/// 骨架屏：形状与真实布局一致，不做转圈
+/// 骨架屏：形状与真实布局一致，一道高光缓慢扫过，不做转圈
 struct Skeleton: View {
     var height: CGFloat = 12
     var width: CGFloat? = nil
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pulse = false
+    @State private var sweep = false
 
     var body: some View {
-        RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-            .fill(Theme.surfaceHover)
-            .frame(width: width, height: height)
-            .opacity(pulse ? 0.55 : 1)
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                    pulse = true
+        GeometryReader { geo in
+            RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                .fill(Theme.surfaceHover)
+                .overlay {
+                    LinearGradient(colors: [.clear, .white.opacity(0.55), .clear],
+                                   startPoint: .leading, endPoint: .trailing)
+                        .frame(width: geo.size.width * 0.55)
+                        .offset(x: sweep ? geo.size.width : -geo.size.width * 0.55)
                 }
-            }
+                .clipShape(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
+                .onAppear {
+                    guard !reduceMotion else { return }
+                    withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                        sweep = true
+                    }
+                }
+        }
+        .frame(width: width, height: height)
     }
 }
 

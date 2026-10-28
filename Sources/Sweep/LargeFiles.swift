@@ -397,7 +397,7 @@ struct MetricSummary: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: Space.s25) {
             Text(title).font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
-            Text(value).font(Typo.mono(Typo.sm, .semibold)).foregroundStyle(Theme.textPrimary)
+            TickerText(text: value, font: Typo.f(Typo.sm, .semibold), color: Theme.textPrimary)
         }
     }
 }

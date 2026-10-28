@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 迷你趋势图（sparkline）
+/// 迷你趋势图（sparkline）：渐变面积 + 轻微外发光 + 末点脉冲
 struct Sparkline: View {
     let data: [Double]
     var color: Color = Theme.accent
@@ -14,15 +14,37 @@ struct Sparkline: View {
         Canvas { ctx, size in
             let pts = points(size: size)
             guard pts.count > 1 else { return }
-            var path = Path()
-            path.addLines(pts)
-            ctx.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+
+            var line = Path()
+            line.addLines(pts)
+
+            // 面积：从线到基线，越往下越透
             var fill = Path()
             fill.addLines(pts)
             fill.addLine(to: CGPoint(x: pts[pts.count - 1].x, y: size.height))
             fill.addLine(to: CGPoint(x: pts[0].x, y: size.height))
             fill.closeSubpath()
-            ctx.fill(fill, with: .color(color.opacity(0.12)))
+            ctx.fill(fill, with: .linearGradient(
+                Gradient(colors: [color.opacity(0.30), color.opacity(0.02)]),
+                startPoint: CGPoint(x: 0, y: 0), endPoint: CGPoint(x: 0, y: size.height)))
+
+            // 外发光：同一条线描粗一点、糊一层再压上来
+            ctx.drawLayer { glow in
+                glow.addFilter(.blur(radius: 2.5))
+                glow.stroke(line, with: .color(color.opacity(0.45)),
+                            style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+            }
+            ctx.stroke(line, with: .linearGradient(
+                Gradient(colors: [color.opacity(0.75), color]),
+                startPoint: CGPoint(x: 0, y: 0), endPoint: CGPoint(x: size.width, y: 0)),
+                style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+
+            // 末点：一个小实心点加一圈光晕
+            let last = pts[pts.count - 1]
+            ctx.fill(Path(ellipseIn: CGRect(x: last.x - 5, y: last.y - 5, width: 10, height: 10)),
+                     with: .color(color.opacity(0.22)))
+            ctx.fill(Path(ellipseIn: CGRect(x: last.x - 2, y: last.y - 2, width: 4, height: 4)),
+                     with: .color(color))
         }
     }
 
@@ -31,16 +53,16 @@ struct Sparkline: View {
         let maxV = max(data.max() ?? 1, 0.0001)
         let w = size.width / CGFloat(data.count - 1)
         return data.enumerated().map { i, v in
-            CGPoint(x: CGFloat(i) * w, y: size.height - CGFloat(v / maxV) * (size.height - 2) - 1)
+            CGPoint(x: CGFloat(i) * w, y: size.height - CGFloat(v / maxV) * (size.height - 4) - 2)
         }
     }
 }
 
-/// 环形进度仪表
+/// 环形进度仪表：渐变描边 + 外发光，数值变化时有过渡
 struct GaugeRing: View {
     let value: Double          // 0...1
     let color: Color
-    let lineWidth: CGFloat = 6
+    var lineWidth: CGFloat = 6
 
     var body: some View {
         ZStack {
@@ -48,8 +70,14 @@ struct GaugeRing: View {
                 .stroke(Theme.surfaceHover, lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: min(max(value, 0.001), 1))
-                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .stroke(
+                    AngularGradient(
+                        colors: [color.opacity(0.45), color, color.opacity(0.85)],
+                        center: .center, startAngle: .degrees(-90), endAngle: .degrees(270)),
+                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
+                .shadow(color: color.opacity(0.5), radius: lineWidth * 0.7)
+                .animation(Motion.base, value: value)
         }
     }
 }

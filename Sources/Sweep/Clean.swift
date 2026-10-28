@@ -368,7 +368,6 @@ struct CleanView: View {
             }
             .padding(Space.s300)
         }
-        .background(Theme.bg)
         .onAppear {
             if !engine.hasScanned && !engine.scanning { engine.scan() }
             if leftovers.isEmpty && !leftoverBusy { reloadLeftovers() }
@@ -482,14 +481,30 @@ struct CleanView: View {
             VStack(alignment: .leading, spacing: Space.s200) {
                 HStack(alignment: .center, spacing: Space.s200) {
                     Image(systemName: "wind")
-                        .font(.system(size: 25, weight: .light))
-                        .foregroundStyle(Theme.accent)
+                        .font(.system(size: 26, weight: .light))
+                        .foregroundStyle(.white)
                         .frame(width: 60, height: 60)
-                        .background(RoundedRectangle(cornerRadius: Radius.xl).fill(Theme.accentSoft))
+                        .background(
+                            RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+                                .fill(LinearGradient(
+                                    colors: [Color(hex: "#5C9BFF"), Color(hex: "#2A62DE")],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
+                                        .strokeBorder(.white.opacity(0.35), lineWidth: 1))
+                                .overlay(SheenOverlay(cornerRadius: Radius.xl, intensity: 0.5))
+                                .shadow(color: Theme.accent.opacity(0.35), radius: 12, y: 5)
+                        )
                     VStack(alignment: .leading, spacing: 5) {
                         Text("所选逻辑大小").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
                         Text(engine.selectedTotal.sizeText)
-                            .font(Typo.f(Typo.display, .semibold).monospacedDigit()).foregroundStyle(Theme.accent)
+                            .font(Typo.f(Typo.display, .semibold).monospacedDigit())
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [Color(hex: "#4C93FF"), Theme.accent, Color(hex: "#1D47B8")],
+                                    startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .shadow(color: Theme.accent.opacity(0.22), radius: 10, y: 4)
+                            .animation(Motion.base, value: engine.selectedTotal)
                         Text("\(engine.selectedItems.count) 项已选 · 占用估算 \(engine.selectedAllocated.bytesText)")
                             .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
                         Text("全部可选：\(engine.selectableCount) 项 · \(engine.selectableTotal.bytesText)")

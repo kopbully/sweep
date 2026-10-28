@@ -140,7 +140,6 @@ struct OptimizeView: View {
             }
             .padding(20)
         }
-        .background(Theme.bg)
         .alert(item: Binding(get: { pendingAdmin }, set: { pendingAdmin = $0 })) { task in
             Alert(title: Text("需要管理员权限"),
                   message: Text("「\(task.title)」会用系统授权执行一条命令。\n\n接下来会弹出系统密码窗口，输入一次当前用户密码即可；这条命令只做一件事，不会申请常驻权限。"),

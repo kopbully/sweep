@@ -80,9 +80,18 @@ struct ShellView: View {
             Rectangle().fill(Theme.border).frame(width: 1)
             VStack(spacing: 0) {
                 workspaceBar
-                detail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Theme.bg)
+                ZStack {
+                    AmbientBackdrop()
+                    detail
+                        .id(selected)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .offset(y: 10)),
+                            removal: .opacity))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .animation(reduceMotion ? nil : Motion.base, value: selected)
             }
         }
         .background(Theme.bg)
@@ -126,6 +135,7 @@ struct ShellView: View {
         HStack(spacing: Space.s100) {
             // 图标自带 100/1024 的透明留白，取 46 让视觉尺寸落在 40pt
             SweepLogo(size: 46)
+                .overlay(SheenOverlay(cornerRadius: 12, period: 7, intensity: 0.5))
             VStack(alignment: .leading, spacing: 3) {
                 Text("Sweep")
                     .font(Typo.f(Typo.xl, .bold))
@@ -197,7 +207,7 @@ struct ShellView: View {
         .padding(.horizontal, Space.s300)
         .frame(height: 50)
         .background(GlassSurface(material: .headerView, blendingMode: .withinWindow))
-        .overlay(Rectangle().fill(Theme.border).frame(height: 1), alignment: .bottom)
+        .overlay(alignment: .bottom) { ToolbarRule() }
     }
 
     // MARK: 内容
@@ -233,8 +243,9 @@ private struct SidebarRow: View {
             HStack(spacing: Space.s100) {
                 Image(systemName: module.glyph)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(selected ? Color.white : Theme.textSecondary)
+                    .foregroundStyle(selected ? Color.white : (hovering ? Theme.accent : Theme.textSecondary))
                     .frame(width: 20)
+                    .symbolRenderingMode(.hierarchical)
                 Text(module.title)
                     .font(Typo.f(Typo.sm, selected ? .semibold : .medium))
                     .foregroundStyle(selected ? Color.white : Theme.textPrimary)
@@ -243,10 +254,12 @@ private struct SidebarRow: View {
             .padding(.horizontal, Space.s100)
             .frame(height: 32)
             .background(
-                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                    .fill(selected ? Theme.selection : (hovering ? Theme.surface.opacity(0.65) : Color.clear))
+                ZStack {
+                    RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                        .fill(hovering && !selected ? Theme.surface.opacity(0.65) : Color.clear)
+                    SelectionPill(active: selected)
+                }
             )
-            .shadow(color: selected ? Theme.selection.opacity(0.16) : .clear, radius: 3, y: 1)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -256,6 +269,7 @@ private struct SidebarRow: View {
         .accessibilityIdentifier("module-\(module.rawValue)")
         .onHover { hovering = $0 }
         .animation(reduceMotion ? .none : Motion.quick, value: hovering)
+        .animation(reduceMotion ? .none : Motion.base, value: selected)
         .help(module.hint)
     }
 }
