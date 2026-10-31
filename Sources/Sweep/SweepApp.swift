@@ -10,7 +10,7 @@ struct SweepApp: App {
             ShellView()
                 .frame(minWidth: 1080, minHeight: 700)
         }
-        .windowStyle(.automatic)
+        .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)
         .defaultSize(width: 1080, height: 700)
     }
@@ -78,23 +78,23 @@ struct ShellView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-            Rectangle().fill(Theme.border).frame(width: 1)
+            Rectangle().fill(Theme.border).frame(width: 0.5)
             VStack(spacing: 0) {
                 workspaceBar
                 ZStack {
                     AmbientBackdrop()
                     detail
                         .id(selected)
-                        .transition(.asymmetric(
-                            insertion: .opacity.combined(with: .offset(y: 10)),
-                            removal: .opacity))
+                        .transition(.opacity)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-                .animation(reduceMotion ? nil : Motion.base, value: selected)
+                .animation(reduceMotion ? nil : Motion.quick, value: selected)
             }
         }
+        // 隐藏标题栏后侧栏和工具栏延伸到窗口顶部，红绿灯浮在侧栏上，与系统应用一致
+        .ignoresSafeArea(.container, edges: .top)
         .background(Theme.bg)
         .background(SweepWindowChrome().frame(width: 0, height: 0))
         .background(WindowVisibilityReader(visible: $windowVisible).frame(width: 0, height: 0))
@@ -107,56 +107,58 @@ struct ShellView: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // 给红绿灯留出位置
+            Color.clear.frame(height: 40)
             brand
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: Space.s100) {
+                VStack(alignment: .leading, spacing: Space.s200) {
                     ForEach(ModuleGroup.all) { group in
-                        VStack(alignment: .leading, spacing: Space.s25) {
+                        VStack(alignment: .leading, spacing: 1) {
                             Text(group.title)
-                                .font(Typo.f(Typo.xs, .medium))
+                                .font(Typo.f(Typo.xs, .semibold))
                                 .foregroundStyle(Theme.textMuted)
-                                .padding(.horizontal, Space.s200)
+                                .padding(.horizontal, Space.s200 + 2)
                                 .padding(.bottom, Space.s50)
                             ForEach(group.modules) { module in
                                 SidebarRow(module: module, selected: selected == module) {
-                                    withAnimation(reduceMotion ? nil : Motion.quick) { selected = module }
+                                    withAnimation(reduceMotion ? nil : Motion.instant) { selected = module }
                                 }
                             }
                         }
                     }
                 }
-                .padding(.vertical, Space.s100)
+                .padding(.top, Space.s100)
+                .padding(.bottom, Space.s200)
             }
-            Spacer(minLength: Space.s100)
             footer
         }
-        .frame(width: 224)
+        .frame(width: 220)
         .background(GlassSurface())
     }
 
     private var brand: some View {
-        HStack(spacing: Space.s100) {
-            // 图标自带 100/1024 的透明留白，取 46 让视觉尺寸落在 40pt
-            SweepLogo(size: 46)
-                .overlay(SheenOverlay(cornerRadius: 12, period: 7, intensity: 0.5))
-            VStack(alignment: .leading, spacing: 3) {
+        HStack(spacing: Space.s75) {
+            // 图标自带约 10% 透明留白，取 34 让视觉尺寸约 28pt
+            SweepLogo(size: 34)
+            VStack(alignment: .leading, spacing: 0) {
                 Text("Sweep")
-                    .font(Typo.f(Typo.xl, .bold))
+                    .font(Typo.f(Typo.base, .semibold))
                     .foregroundStyle(Theme.textPrimary)
                 Text("macOS 空间管家")
                     .font(Typo.f(Typo.xs))
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(Theme.textMuted)
             }
             Spacer()
         }
-        .padding(.horizontal, Space.s200)
-        .padding(.top, Space.s200)
-        .padding(.bottom, Space.s200)
+        .padding(.horizontal, Space.s200 - 2)
+        .padding(.bottom, Space.s75)
     }
 
     private var footer: some View {
-        VStack(alignment: .leading, spacing: Space.s25) {
-            Rectangle().fill(Theme.border).frame(height: 1).padding(.horizontal, Space.s200)
+        VStack(alignment: .leading, spacing: 1) {
+            Rectangle().fill(Theme.border).frame(height: 0.5)
+                .padding(.horizontal, Space.s200)
+                .padding(.bottom, Space.s75)
             SidebarFooterButton(
                 title: blackHole.isVisible ? "隐藏桌面黑洞" : "桌面黑洞",
                 icon: "circle.dotted",
@@ -167,49 +169,41 @@ struct ShellView: View {
             SidebarFooterButton(title: "操作日志", icon: "doc.text", active: false) {
                 NSWorkspace.shared.open(URL(fileURLWithPath: OperationsLog.logPath, isDirectory: false))
             }
-            HStack {
-                Text(blackHole.lastMessage)
-                    .font(Typo.f(Typo.xs))
-                    .foregroundStyle(Theme.textSecondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer()
-            }
-            .padding(.horizontal, Space.s200)
-            .padding(.top, Space.s25)
-            HStack {
-                Text("Sweep \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")")
-                Spacer()
-                Image(systemName: "laptopcomputer")
-            }
-            .font(Typo.f(Typo.xs))
-            .foregroundStyle(Theme.textMuted)
-            .padding(.horizontal, Space.s200)
-            .padding(.top, Space.s75)
-            .padding(.bottom, Space.s200)
+            Text(blackHole.lastMessage)
+                .font(Typo.f(Typo.xs))
+                .foregroundStyle(Theme.textMuted)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, Space.s200 + 2)
+                .padding(.top, Space.s50)
+            Text("版本 \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev")")
+                .font(Typo.f(10))
+                .foregroundStyle(Theme.textMuted.opacity(0.8))
+                .padding(.horizontal, Space.s200 + 2)
+                .padding(.top, Space.s50)
+                .padding(.bottom, Space.s200)
         }
     }
 
     private var workspaceBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: selected.glyph)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Theme.accent)
+        HStack(spacing: Space.s75) {
             Text(ModuleGroup.all.first { $0.modules.contains(selected) }?.title ?? "Sweep")
-                .foregroundStyle(Theme.textSecondary)
+                .foregroundStyle(Theme.textMuted)
             Image(systemName: "chevron.right")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(Theme.textMuted)
-            Text(selected.title).fontWeight(.semibold)
+            Text(selected.title)
+                .fontWeight(.semibold)
+                .foregroundStyle(Theme.textPrimary)
             Spacer()
-            Label("本机运行", systemImage: "internaldrive")
+            Label("仅在本机运行", systemImage: "lock.shield")
                 .font(Typo.f(Typo.xs))
-                .foregroundStyle(Theme.textSecondary)
+                .foregroundStyle(Theme.textMuted)
         }
         .font(Typo.f(Typo.sm))
         .padding(.horizontal, Space.s300)
-        .frame(height: 50)
-        .background(GlassSurface(material: .headerView, blendingMode: .withinWindow))
+        .frame(height: 52)
+        .background(Theme.bg)
         .overlay(alignment: .bottom) { ToolbarRule() }
     }
 
@@ -239,40 +233,38 @@ private struct SidebarRow: View {
     let action: () -> Void
 
     @State private var hovering = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.controlActiveState) private var activeState
 
     var body: some View {
+        let onAccent = selected && activeState != .inactive
         Button(action: action) {
-            HStack(spacing: Space.s100) {
+            HStack(spacing: Space.s75) {
                 Image(systemName: module.glyph)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(selected ? Color.white : (hovering ? Theme.accent : Theme.textSecondary))
-                    .frame(width: 20)
-                    .symbolRenderingMode(.hierarchical)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(onAccent ? Color.white : Theme.accent)
+                    .frame(width: 18)
                 Text(module.title)
-                    .font(Typo.f(Typo.sm, selected ? .semibold : .medium))
-                    .foregroundStyle(selected ? Color.white : Theme.textPrimary)
+                    .font(Typo.f(Typo.sm, selected ? .medium : .regular))
+                    .foregroundStyle(onAccent ? Color.white : Theme.textPrimary)
                 Spacer()
             }
-            .padding(.horizontal, Space.s100)
-            .frame(height: 32)
+            .padding(.horizontal, Space.s75)
+            .frame(height: 28)
             .background(
                 ZStack {
-                    RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                        .fill(hovering && !selected ? Theme.surface.opacity(0.65) : Color.clear)
+                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                        .fill(hovering && !selected ? Theme.textPrimary.opacity(0.06) : Color.clear)
                     SelectionPill(active: selected)
                 }
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, Space.s100)
+        .padding(.horizontal, Space.s100 - 2)
         .accessibilityLabel(module.title)
         .accessibilityValue(selected ? "当前页面" : "")
         .accessibilityIdentifier("module-\(module.rawValue)")
         .onHover { hovering = $0 }
-        .animation(reduceMotion ? .none : Motion.quick, value: hovering)
-        .animation(reduceMotion ? .none : Motion.base, value: selected)
         .help(module.hint)
     }
 }
@@ -287,11 +279,11 @@ private struct SidebarFooterButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: Space.s100) {
+            HStack(spacing: Space.s75) {
                 Image(systemName: icon)
-                    .font(.system(size: 14))
+                    .font(.system(size: 13))
                     .foregroundStyle(active ? Theme.accent : Theme.textSecondary)
-                    .frame(width: 16)
+                    .frame(width: 18)
                 Text(title)
                     .font(Typo.f(Typo.sm))
                     .foregroundStyle(Theme.textSecondary)
@@ -300,16 +292,16 @@ private struct SidebarFooterButton: View {
                     Circle().fill(Theme.success).frame(width: 6, height: 6)
                 }
             }
-            .padding(.horizontal, Space.s200)
-            .padding(.vertical, Space.s75)
+            .padding(.horizontal, Space.s75)
+            .frame(height: 28)
             .background(
-                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                    .fill(hovering ? Theme.surface : Color.clear)
-                    .padding(.horizontal, Space.s100)
+                RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
+                    .fill(hovering ? Theme.textPrimary.opacity(0.06) : Color.clear)
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .padding(.horizontal, Space.s100 - 2)
         .onHover { hovering = $0 }
     }
 }

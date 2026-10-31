@@ -25,24 +25,14 @@ struct Sparkline: View {
             fill.addLine(to: CGPoint(x: pts[0].x, y: size.height))
             fill.closeSubpath()
             ctx.fill(fill, with: .linearGradient(
-                Gradient(colors: [color.opacity(0.30), color.opacity(0.02)]),
+                Gradient(colors: [color.opacity(0.16), color.opacity(0.0)]),
                 startPoint: CGPoint(x: 0, y: 0), endPoint: CGPoint(x: 0, y: size.height)))
 
-            // 外发光：同一条线描粗一点、糊一层再压上来
-            ctx.drawLayer { glow in
-                glow.addFilter(.blur(radius: 2.5))
-                glow.stroke(line, with: .color(color.opacity(0.45)),
-                            style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-            }
-            ctx.stroke(line, with: .linearGradient(
-                Gradient(colors: [color.opacity(0.75), color]),
-                startPoint: CGPoint(x: 0, y: 0), endPoint: CGPoint(x: size.width, y: 0)),
-                style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+            ctx.stroke(line, with: .color(color),
+                       style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
 
-            // 末点：一个小实心点加一圈光晕
+            // 末点：一个小实心点标出当前值
             let last = pts[pts.count - 1]
-            ctx.fill(Path(ellipseIn: CGRect(x: last.x - 5, y: last.y - 5, width: 10, height: 10)),
-                     with: .color(color.opacity(0.22)))
             ctx.fill(Path(ellipseIn: CGRect(x: last.x - 2, y: last.y - 2, width: 4, height: 4)),
                      with: .color(color))
         }
@@ -73,13 +63,8 @@ struct GaugeRing: View {
                 .stroke(Theme.surfaceHover, lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: min(max(value, 0.001), 1))
-                .stroke(
-                    AngularGradient(
-                        colors: [color.opacity(0.45), color, color.opacity(0.85)],
-                        center: .center, startAngle: .degrees(-90), endAngle: .degrees(270)),
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .shadow(color: color.opacity(0.5), radius: lineWidth * 0.7)
                 .animation(animated ? Motion.base : nil, value: value)
         }
     }

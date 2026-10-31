@@ -7,28 +7,30 @@ import AppKit
 // 玻璃材质由 AppKit 合成，列表与卡片保持实色以保证文字对比度。
 
 enum Theme {
-    static let bg = Color.adaptive(light: "#F4F7FC", dark: "#1C1C20")
-    static let surface = Color.adaptive(light: "#FFFFFF", dark: "#29292E")
-    static let surfaceRaised = Color.adaptive(light: "#EDF1F7", dark: "#34343A")
-    static let surfaceHover = Color.adaptive(light: "#E3EAF4", dark: "#414148")
-    static let border = Color.adaptive(light: "#DCE3ED", dark: "#42424A")
-    static let chrome = Color.adaptive(light: "#EAF1FB", dark: "#24242B")
-    static let chromeTint = Color.adaptive(light: "#F5F9FF", dark: "#1C1C24").opacity(0.34)
-    static let shadow = Color.adaptive(light: "#233653", dark: "#000000").opacity(0.07)
+    // 中性色取自 macOS 系统配色：浅色是 Finder/设置的灰白层次，深色是系统窗口的炭灰。
+    static let bg = Color.adaptive(light: "#F5F5F7", dark: "#1E1E20")
+    static let surface = Color.adaptive(light: "#FFFFFF", dark: "#2A2A2D")
+    static let surfaceRaised = Color.adaptive(light: "#F2F2F5", dark: "#323236")
+    static let surfaceHover = Color.adaptive(light: "#E9E9EE", dark: "#3A3A3F")
+    static let border = Color.adaptive(light: "#E3E3E8", dark: "#3A3A3E")
+    static let chrome = Color.adaptive(light: "#ECECEF", dark: "#252528")
+    static let chromeTint = Color.adaptive(light: "#F6F6F8", dark: "#1E1E22").opacity(0.30)
+    static let shadow = Color.adaptive(light: "#000000", dark: "#000000").opacity(0.05)
 
-    // 文字
-    static let textPrimary = Color.adaptive(light: "#202C3F", dark: "#F0F0F4")
-    static let textSecondary = Color.adaptive(light: "#5D6A7E", dark: "#B9B9C5")
-    static let textMuted = Color.adaptive(light: "#667085", dark: "#9393A3")
+    // 文字（系统 label / secondaryLabel / tertiaryLabel 的近似实色）
+    static let textPrimary = Color.adaptive(light: "#1D1D1F", dark: "#F5F5F7")
+    static let textSecondary = Color.adaptive(light: "#6E6E73", dark: "#AEAEB2")
+    static let textMuted = Color.adaptive(light: "#86868B", dark: "#8E8E93")
 
-    static let accent = Color.adaptive(light: "#246CDF", dark: "#78AAFF")
-    static let actionFill = Color(hex: "#2869DB")
-    static let selection = Color(hex: "#3070DF")
+    // 强调色：系统蓝；状态色：系统绿 / 橙 / 红（浅色下压暗一档保证对比度）
+    static let accent = Color.adaptive(light: "#0A6CFF", dark: "#0A84FF")
+    static let actionFill = Color.adaptive(light: "#0A6CFF", dark: "#0A84FF")
+    static let selection = Color.adaptive(light: "#0060E6", dark: "#3395FF")
     static let accentSoft = accent.opacity(0.10)
-    static let success = Color.adaptive(light: "#208458", dark: "#57C995")
-    static let accentWarn = Color.adaptive(light: "#A26612", dark: "#F0B65D")
+    static let success = Color.adaptive(light: "#248A3D", dark: "#30D158")
+    static let accentWarn = Color.adaptive(light: "#B25000", dark: "#FF9F0A")
     static let accentWarnSoft = accentWarn.opacity(0.12)
-    static let accentDanger = Color.adaptive(light: "#CC3945", dark: "#FF7B86")
+    static let accentDanger = Color.adaptive(light: "#D70015", dark: "#FF453A")
     static let accentDangerSoft = accentDanger.opacity(0.10)
 
     // 兼容既有调用点
@@ -56,8 +58,9 @@ enum Typo {
     static let base: CGFloat = 15
     static let lg: CGFloat = 17
     static let xl: CGFloat = 20
-    static let xxl: CGFloat = 26
-    static let display: CGFloat = 34
+    static let xxl: CGFloat = 24
+    static let title: CGFloat = 22
+    static let display: CGFloat = 30
 
     static func f(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight)
@@ -221,18 +224,18 @@ private struct SweepButtonStyle: ButtonStyle {
             .font(Typo.f(Typo.sm, .semibold))
             .foregroundStyle(foreground)
             .padding(.horizontal, Space.s100)
-            .padding(.vertical, Space.s75)
+            .padding(.vertical, 6)
             .background(
-                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(background)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
-                    .strokeBorder(borderColor, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(borderColor, lineWidth: 0.75)
             )
-            .contentShape(RoundedRectangle(cornerRadius: Radius.md, style: .continuous))
-            .shadow(color: kind == .primary && enabled ? Theme.accent.opacity(hovering ? 0.38 : 0.18) : .clear,
-                    radius: hovering ? 10 : 4, y: hovering ? 3 : 2)
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            // 只给次级按钮一层系统控件式的细投影，主按钮保持纯色，不发光
+            .shadow(color: kind == .secondary && enabled ? Theme.shadow : .clear, radius: 1, y: 0.5)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .opacity(enabled ? 1 : 0.55)
             .animation(reduceMotion ? .none : Motion.quick, value: hovering)
@@ -313,34 +316,17 @@ struct Panel<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) { content() }
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // 实色卡片 + 发丝描边 + 极淡投影：系统设置 / 活动监视器式的克制层次
             .background(
-                ZStack {
-                    // 磨砂底 + 一层自适应实色，兼顾通透和文字对比度
-                    RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
-                        .fill(.ultraThinMaterial)
-                    RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
-                        .fill(Theme.surface.opacity(0.55))
-                    if lift {
-                        RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
-                            .fill(LinearGradient(
-                                colors: [Theme.accent.opacity(hovering ? 0.09 : 0.03), .clear],
-                                startPoint: .topLeading, endPoint: .bottomTrailing))
-                    }
-                }
+                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                    .fill(Theme.surface)
             )
-            .clipShape(RoundedRectangle(cornerRadius: Radius.xl, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            colors: [Theme.accent.opacity(lift && hovering ? 0.35 : 0.18),
-                                     Theme.border, Theme.border],
-                            startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: 1)
+                RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                    .strokeBorder(lift && hovering ? Theme.accent.opacity(0.35) : Theme.border, lineWidth: 0.75)
             )
-            .shadow(color: Theme.shadow, radius: hovering && lift ? 18 : 10, y: hovering && lift ? 8 : 3)
-            .offset(y: hovering && lift ? -1.5 : 0)
-            .onHover { hovering = $0 }
+            .shadow(color: Theme.shadow, radius: 2, y: 1)
+            .onHover { hovering = lift && $0 }
             .animation(reduceMotion ? .none : Motion.quick, value: hovering)
     }
 }
@@ -359,9 +345,9 @@ struct PageHeader<Actions: View>: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: Space.s300) {
-            VStack(alignment: .leading, spacing: Space.s75) {
+            VStack(alignment: .leading, spacing: Space.s50) {
                 Text(title)
-                    .font(Typo.f(Typo.xxl, .semibold))
+                    .font(Typo.f(Typo.title, .bold))
                     .foregroundStyle(Theme.textPrimary)
                     .lineLimit(1)
                 Text(subtitle)
@@ -469,11 +455,6 @@ struct MetricTile: View {
         .background(
             RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
                 .fill(Theme.surfaceRaised)
-                .overlay(alignment: .topLeading) {
-                    RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
-                        .fill(LinearGradient(colors: [tone.opacity(0.10), .clear],
-                                             startPoint: .topLeading, endPoint: .bottomTrailing))
-                }
         )
         .overlay(
             RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
@@ -494,14 +475,8 @@ struct ProgressBar: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(Theme.surfaceHover)
                 Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [color.opacity(0.65), color],
-                            startPoint: .leading, endPoint: .trailing)
-                    )
+                    .fill(color)
                     .frame(width: max(geo.size.width * CGFloat(min(max(value, 0), 1)), value > 0 ? 4 : 0))
-                    // 只留一层薄薄的外发光，半径过半就把下方的说明文字糊住了
-                    .shadow(color: color.opacity(0.28), radius: max(1.5, height * 0.5), x: 0, y: 0)
             }
         }
         .frame(height: height)
@@ -529,11 +504,7 @@ struct EmptyState<Action: View>: View {
                 .foregroundStyle(Theme.accent)
                 .frame(width: 60, height: 60)
                 .background(
-                    ZStack {
-                        PulseHalo()
-                        RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
-                            .fill(Theme.accentSoft)
-                    }
+                    Circle().fill(Theme.accentSoft)
                 )
                 .padding(.bottom, Space.s50)
             Text(title)
@@ -644,13 +615,8 @@ struct SegmentedBar<Item: Hashable>: View {
                             // 只给当前项挂几何标识，切换时胶囊会自己滑过去
                             if active {
                                 RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                                    .fill(LinearGradient(
-                                        colors: [Color.white, Theme.accentSoft],
-                                        startPoint: .top, endPoint: .bottom))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                                            .strokeBorder(Theme.accent.opacity(0.32), lineWidth: 0.5))
-                                    .shadow(color: Theme.accent.opacity(0.20), radius: 3, y: 1)
+                                    .fill(Theme.surface)
+                                    .shadow(color: Color.black.opacity(0.12), radius: 1, y: 0.5)
                                     .matchedGeometryEffect(id: "segmented-pill", in: pill)
                             }
                         }
@@ -664,7 +630,6 @@ struct SegmentedBar<Item: Hashable>: View {
             RoundedRectangle(cornerRadius: Radius.md, style: .continuous)
                 .fill(Theme.surfaceRaised)
         )
-        .overlay(RoundedRectangle(cornerRadius: Radius.md).strokeBorder(Theme.border, lineWidth: 1))
     }
 }
 

@@ -147,19 +147,12 @@ struct TreemapView: View {
             RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                 .fill(color)
                 .overlay(
-                    // 左上打一道高光，块面由纯色片变成有厚度的玻璃砖
-                    RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
-                        .fill(LinearGradient(
-                            colors: [Color.white.opacity(isHovered ? 0.26 : 0.10), .clear],
-                            startPoint: .topLeading, endPoint: .bottomTrailing))
-                )
-                .overlay(
                     RoundedRectangle(cornerRadius: Radius.sm, style: .continuous)
                         .strokeBorder(isHovered ? Color.white.opacity(0.9) : Theme.bg.opacity(0.6),
                                       lineWidth: isHovered ? 2 : 1)
                 )
-                .shadow(color: isHovered ? color.opacity(0.85) : .clear,
-                        radius: isHovered ? 16 : 0, x: 0, y: isHovered ? 3 : 0)
+                .shadow(color: isHovered ? Color.black.opacity(0.18) : .clear,
+                        radius: isHovered ? 4 : 0, x: 0, y: isHovered ? 1 : 0)
             if rect.width > 72 && rect.height > 30 {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(tile.label)
@@ -303,8 +296,8 @@ struct SunburstView: View {
                 shape
                     .fill(tint)
                     .overlay(shape.stroke(Theme.bg, lineWidth: 1.5))
-                    .shadow(color: isHovered ? tint.opacity(0.8) : .clear,
-                            radius: isHovered ? 14 : 0, x: 0, y: 0)
+                    .shadow(color: isHovered ? Color.black.opacity(0.18) : .clear,
+                            radius: isHovered ? 4 : 0, x: 0, y: 1)
                     .opacity(dimmed ? 0.45 : 1)
                     .zIndex(isHovered ? 2 : 1)
                     .onHover { hovering in

@@ -512,7 +512,7 @@ struct StatusView: View {
                     .foregroundStyle(Theme.textPrimary).lineLimit(1).minimumScaleFactor(0.75)
                 Sparkline(data: series, color: color).frame(height: 28)
                 HStack {
-                    GaugeRing(value: ratio, color: color, animated: false).frame(width: 10, height: 10)
+                    GaugeRing(value: ratio, color: color, lineWidth: 2, animated: false).frame(width: 11, height: 11)
                     Text(detail).font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
                     Spacer()
                 }

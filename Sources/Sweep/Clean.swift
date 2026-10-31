@@ -484,29 +484,18 @@ struct CleanView: View {
             VStack(alignment: .leading, spacing: Space.s200) {
                 HStack(alignment: .center, spacing: Space.s200) {
                     Image(systemName: "wind")
-                        .font(.system(size: 26, weight: .light))
-                        .foregroundStyle(.white)
-                        .frame(width: 60, height: 60)
+                        .font(.system(size: 24, weight: .regular))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 52, height: 52)
                         .background(
-                            RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
-                                .fill(LinearGradient(
-                                    colors: [Color(hex: "#5C9BFF"), Color(hex: "#2A62DE")],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: Radius.xl, style: .continuous)
-                                        .strokeBorder(.white.opacity(0.35), lineWidth: 1))
-                                .overlay(SheenOverlay(cornerRadius: Radius.xl, intensity: 0.5))
-                                .shadow(color: Theme.accent.opacity(0.35), radius: 12, y: 5)
+                            RoundedRectangle(cornerRadius: Radius.lg, style: .continuous)
+                                .fill(Theme.accentSoft)
                         )
                     VStack(alignment: .leading, spacing: 5) {
                         Text("所选逻辑大小").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
                         Text(engine.selectedTotal.sizeText)
                             .font(Typo.f(Typo.display, .semibold).monospacedDigit())
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [Color(hex: "#4C93FF"), Theme.accent, Color(hex: "#1D47B8")],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .shadow(color: Theme.accent.opacity(0.22), radius: 10, y: 4)
+                            .foregroundStyle(Theme.textPrimary)
                             .animation(Motion.base, value: engine.selectedTotal)
                         Text("\(engine.selectedItems.count) 项已选 · 占用估算 \(engine.selectedAllocated.bytesText)")
                             .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
