@@ -63,6 +63,9 @@ struct GaugeRing: View {
     let value: Double          // 0...1
     let color: Color
     var lineWidth: CGFloat = 6
+    /// 实时监控每秒都会改值；若每次都播 0.5s 的过渡，窗口有一半时间在逐帧重绘
+    /// （阴影 + 磨砂面板），监控页可因此多出 10%+ CPU。实时场景传 false。
+    var animated: Bool = true
 
     var body: some View {
         ZStack {
@@ -77,7 +80,7 @@ struct GaugeRing: View {
                     style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .shadow(color: color.opacity(0.5), radius: lineWidth * 0.7)
-                .animation(Motion.base, value: value)
+                .animation(animated ? Motion.base : nil, value: value)
         }
     }
 }

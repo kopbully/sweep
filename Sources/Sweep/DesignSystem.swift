@@ -116,7 +116,7 @@ extension Color {
     }
 }
 
-private extension NSColor {
+extension NSColor {
     convenience init(hex: String) {
         var h = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         if h.hasPrefix("#") { h.removeFirst() }
@@ -486,6 +486,8 @@ struct ProgressBar: View {
     let value: Double        // 0...1
     var color: Color = Theme.accent
     var height: CGFloat = 6
+    /// 见 GaugeRing.animated：实时刷新的进度条关掉过渡以免持续重绘
+    var animated: Bool = true
 
     var body: some View {
         GeometryReader { geo in
@@ -503,7 +505,7 @@ struct ProgressBar: View {
             }
         }
         .frame(height: height)
-        .animation(Motion.base, value: value)
+        .animation(animated ? Motion.base : nil, value: value)
     }
 }
 

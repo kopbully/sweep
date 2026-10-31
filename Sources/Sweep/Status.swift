@@ -75,7 +75,10 @@ final class SystemSampler: ObservableObject {
     }
 
     private func push(_ arr: [Double], _ v: Double) -> [Double] {
-        Array((arr + [v]).suffix(60))
+        var next = arr
+        next.append(v)
+        if next.count > 60 { next.removeFirst(next.count - 60) }
+        return next
     }
 }
 
@@ -93,6 +96,9 @@ struct NetworkSample {
 private actor SystemReader {
     private var lastCPU: [UInt32]?
     private var lastNet: NetworkSample?
+    // 磁盘容量和电池电量变化很慢，没必要每秒都走一次文件系统/IOKit 查询
+    private var slowCache: (disk: (total: Int64, free: Int64), battery: (percent: Double?, onAC: Bool), at: TimeInterval)?
+    private static let slowInterval: TimeInterval = 5
 
     func sampleOnce() -> SystemSnapshot {
         var s = SystemSnapshot()
@@ -110,11 +116,19 @@ private actor SystemReader {
         s.netOutBps = rates.sent
         lastNet = network
 
-        let (total, free) = Sizing.disk()
+        let now = ProcessInfo.processInfo.systemUptime
+        let slow: (disk: (total: Int64, free: Int64), battery: (percent: Double?, onAC: Bool), at: TimeInterval)
+        if let cached = slowCache, now - cached.at < Self.slowInterval, cached.disk.total > 0 {
+            slow = cached
+        } else {
+            slow = (Sizing.disk(), Sizing.battery(), now)
+            slowCache = slow
+        }
+        let (total, free) = slow.disk
         s.diskTotalBytes = total
         s.diskFreeBytes = free
 
-        let batt = Sizing.battery()
+        let batt = slow.battery
         s.batteryPercent = batt.percent
         s.onAC = batt.onAC
 
@@ -318,6 +332,10 @@ enum ProcList {
 struct StatusView: View {
     @StateObject private var sampler = SystemSampler()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.sweepWindowVisible) private var windowVisible
+
+    /// 窗口最小化/被完全遮挡/应用进入后台时暂停每秒采样
+    private var shouldSample: Bool { scenePhase != .background && windowVisible }
 
     var body: some View {
         ScrollView {
@@ -352,11 +370,11 @@ struct StatusView: View {
             }
             .padding(Space.s300)
         }
-        .onAppear { if scenePhase != .background { sampler.start() } }
+        .onAppear { if shouldSample { sampler.start() } }
         .onDisappear { sampler.stop() }
-        .task(id: scenePhase) {
+        .task(id: shouldSample) {
             guard !Task.isCancelled else { return }
-            if scenePhase == .background { sampler.stop() } else { sampler.start() }
+            if shouldSample { sampler.start() } else { sampler.stop() }
         }
     }
 
@@ -409,7 +427,7 @@ struct StatusView: View {
                         Text("可用").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
                     }
                 }
-                ProgressBar(value: ratio, color: Theme.usageColor(ratio * 100), height: 5)
+                ProgressBar(value: ratio, color: Theme.usageColor(ratio * 100), height: 5, animated: false)
                 Spacer(minLength: 0)
                 Text("已用 \(Int(ratio * 100))% · 共 \(sampler.snapshot.diskTotalBytes.bytesText)")
                     .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
@@ -454,7 +472,7 @@ struct StatusView: View {
                     Image(systemName: onAC ? "bolt.fill" : "battery.75percent").foregroundStyle(Theme.success)
                 }
                 Text("\(Int(percent))%").font(Typo.f(Typo.xxl, .semibold).monospacedDigit())
-                ProgressBar(value: percent / 100, color: percent > 20 ? Theme.success : Theme.accentDanger, height: 5)
+                ProgressBar(value: percent / 100, color: percent > 20 ? Theme.success : Theme.accentDanger, height: 5, animated: false)
                 Spacer(minLength: 0)
                 Text(onAC ? "已接通电源" : "使用电池")
                     .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
@@ -494,7 +512,7 @@ struct StatusView: View {
                     .foregroundStyle(Theme.textPrimary).lineLimit(1).minimumScaleFactor(0.75)
                 Sparkline(data: series, color: color).frame(height: 28)
                 HStack {
-                    GaugeRing(value: ratio, color: color).frame(width: 10, height: 10)
+                    GaugeRing(value: ratio, color: color, animated: false).frame(width: 10, height: 10)
                     Text(detail).font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
                     Spacer()
                 }
@@ -537,7 +555,11 @@ struct StatusView: View {
 
 private struct ProcessCard: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.sweepWindowVisible) private var windowVisible
     @State private var procs: [ProcInfo] = []
+    /// 排好序的结果缓存：只在数据、排序键或置顶变化时重排，
+    /// 而不是每次 body 求值（悬停、父视图每秒刷新）都对 700+ 个进程排序
+    @State private var sortedProcs: [ProcInfo] = []
     @State private var sortKey: SortKey = .cpu
     @State private var pinned: Set<Int32> = []
     @State private var errorMessage: String?
@@ -559,6 +581,7 @@ private struct ProcessCard: View {
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .frame(width: 200)
+                    .onChange(of: sortKey) { _ in resort() }
                     Label("\(procs.count) 项 · 2 秒刷新", systemImage: "clock")
                         .font(.system(size: 10)).foregroundStyle(Theme.textSecondary)
                 }
@@ -606,14 +629,15 @@ private struct ProcessCard: View {
             }
         }
         .help("CPU 为 ps 提供的进程平均占用；内存为驻留大小 RSS，共享页可能被多个进程计入。")
-        .task(id: scenePhase) {
-            guard scenePhase != .background else { return }
+        .task(id: scenePhase != .background && windowVisible) {
+            guard scenePhase != .background, windowVisible else { return }
             while !Task.isCancelled {
                 do {
                     let result = try await Task.detached(priority: .utility) { try ProcList.fetch() }.value
                     guard !Task.isCancelled else { return }
                     procs = result
                     pinned.formIntersection(Set(result.map(\.id)))
+                    resort()
                     errorMessage = nil
                 } catch {
                     guard !Task.isCancelled else { return }
@@ -624,7 +648,11 @@ private struct ProcessCard: View {
         }
     }
 
-    private var sortedProcs: [ProcInfo] {
+    private func resort() {
+        sortedProcs = Self.sort(procs, by: sortKey, pinned: pinned)
+    }
+
+    private static func sort(_ procs: [ProcInfo], by sortKey: SortKey, pinned: Set<Int32>) -> [ProcInfo] {
         procs.sorted { a, b in
             let aPinned = pinned.contains(a.id), bPinned = pinned.contains(b.id)
             if aPinned != bPinned { return aPinned }
@@ -639,5 +667,6 @@ private struct ProcessCard: View {
 
     private func togglePin(_ pid: Int32) {
         if pinned.contains(pid) { pinned.remove(pid) } else { pinned.insert(pid) }
+        resort()
     }
 }

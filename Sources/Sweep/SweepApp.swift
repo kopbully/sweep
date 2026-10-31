@@ -65,6 +65,7 @@ struct ShellView: View {
     @StateObject private var uninstallEngine = UninstallEngine()
     @ObservedObject private var blackHole = BlackHoleController.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var windowVisible = true
 
     init() {
         // 便于自动化验证：环境变量或 startModule 偏好可直接打开指定模块
@@ -96,6 +97,8 @@ struct ShellView: View {
         }
         .background(Theme.bg)
         .background(SweepWindowChrome().frame(width: 0, height: 0))
+        .background(WindowVisibilityReader(visible: $windowVisible).frame(width: 0, height: 0))
+        .environment(\.sweepWindowVisible, windowVisible)
         .foregroundStyle(Theme.textPrimary)
         .tint(Theme.accent)
     }
