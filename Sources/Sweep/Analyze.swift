@@ -25,18 +25,6 @@ struct DiskEntry: Identifiable, Hashable {
     var isInflated: Bool { inflated >= 536_870_912 && size >= allocated * 2 }
 }
 
-enum DiskLens: String, CaseIterable, Identifiable {
-    case list, treemap, sunburst
-    var id: String { rawValue }
-    var title: String {
-        switch self {
-        case .list: return "列表"
-        case .treemap: return "矩形树图"
-        case .sunburst: return "旭日图"
-        }
-    }
-}
-
 // MARK: - 引擎
 
 final class AnalyzeEngine: ObservableObject {
@@ -47,8 +35,6 @@ final class AnalyzeEngine: ObservableObject {
     /// 本层实际占用（du 口径），与 totalScannedSize 的逻辑长度并列
     @Published var footprintScannedSize: Int64 = 0
     @Published var trail: [String] = [NSHomeDirectory()]
-    /// 逐层缓存，旭日图需要上级层的数据
-    @Published var cache: [String: [DiskEntry]] = [:]
 
     var breadcrumb: [String] { trail }
 
@@ -101,7 +87,6 @@ final class AnalyzeEngine: ObservableObject {
                 self.entries = sorted
                 self.totalScannedSize = total
                 self.footprintScannedSize = foot
-                self.cache[root] = sorted
                 self.scanning = false
             }
         }
@@ -129,16 +114,6 @@ final class AnalyzeEngine: ObservableObject {
         scan()
     }
 
-    /// 沿钻取路径取每一层，供旭日图使用
-    func levels() -> [[DiskEntry]] {
-        var out: [[DiskEntry]] = []
-        for item in trail {
-            if let layer = cache[item], !layer.isEmpty { out.append(layer) }
-        }
-        if out.isEmpty && !entries.isEmpty { out.append(entries) }
-        return out
-    }
-
     private func updateTrail(for target: String) {
         if let index = trail.firstIndex(of: target) {
             trail = Array(trail.prefix(through: index))
@@ -156,15 +131,13 @@ final class AnalyzeEngine: ObservableObject {
 
 struct AnalyzeView: View {
     @ObservedObject var engine: AnalyzeEngine
-    @AppStorage("analyzeLens") private var lens: DiskLens = .list
     @State private var pendingTrash: DiskEntry?
     @State private var trashError: String?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Space.s300) {
-                PageHeader("磁盘分析", subtitle: "逐层看清空间去向。列表适合核对细节，矩形树图适合一眼看出体积占比，旭日图适合沿着层级往里钻。") {
-                    SegmentedBar(items: DiskLens.allCases, title: { $0.title }, selection: $lens)
+                PageHeader("磁盘分析", subtitle: "矩形面积就是实际占用。点文件夹往里钻，右键可在访达中显示或移入废纸篓。") {
                     SweepButton(.secondary, title: "重新统计", systemImage: "arrow.clockwise") { engine.scan() }
                         .disabled(engine.scanning)
                 }
@@ -270,33 +243,7 @@ struct AnalyzeView: View {
         } else if engine.scanning && engine.entries.isEmpty {
             Panel { HStack { Skeleton(height: 14, width: 180); Spacer() } .padding(.vertical, Space.s300) }
         } else {
-            switch lens {
-            case .list: listPanel
-            case .treemap: treemapPanel
-            case .sunburst: sunburstPanel
-            }
-        }
-    }
-
-    private var listPanel: some View {
-        Panel(padding: Space.s75) {
-            VStack(spacing: 0) {
-                HStack {
-                    Text("条目").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
-                    Spacer()
-                    Text("占比 · 大小 · 操作").font(Typo.f(Typo.xs)).foregroundStyle(Theme.textSecondary)
-                }
-                .padding(.horizontal, Space.s100)
-                .padding(.vertical, Space.s75)
-
-                ForEach(Array(engine.entries.enumerated()), id: \.element.id) { index, entry in
-                    entryRow(entry)
-                        .staggerIn(index)
-                    if index < engine.entries.count - 1 {
-                        Rectangle().fill(Theme.border).frame(height: 1).padding(.leading, Space.s100)
-                    }
-                }
-            }
+            treemapPanel
         }
     }
 
@@ -304,63 +251,12 @@ struct AnalyzeView: View {
         Panel {
             VStack(alignment: .leading, spacing: Space.s100) {
                 GroupTitle(text: "体积占比", trailing: "最多显示 24 块 + 其他")
-                TreemapView(entries: engine.entries) { entry in
-                    open(entry)
-                }
+                TreemapView(entries: engine.entries,
+                            onSelect: { open($0) },
+                            onReveal: { reveal($0) },
+                            onTrash: { pendingTrash = $0 })
             }
         }
-    }
-
-    private var sunburstPanel: some View {
-        Panel {
-            VStack(alignment: .leading, spacing: Space.s100) {
-                GroupTitle(text: "层级分布", trailing: "圆环由内到外对应当前钻取路径")
-                HStack(alignment: .top, spacing: Space.s300) {
-                    SunburstView(levels: engine.levels()) { entry in
-                        open(entry)
-                    }
-                    .frame(maxWidth: 420)
-                    legend
-                    Spacer(minLength: 0)
-                }
-                if engine.levels().count < 2 {
-                    Text("再往里点一层，就会多出一圈更细的分段。")
-                        .font(Typo.f(Typo.xs)).foregroundStyle(Theme.textMuted)
-                }
-            }
-        }
-    }
-
-    private var legend: some View {
-        let total = engine.entries.reduce(Int64(0)) { $0 + max($1.footprint, 0) }
-        let top = Array(engine.entries.sorted { $0.footprint > $1.footprint }.prefix(8))
-        return VStack(alignment: .leading, spacing: Space.s75) {
-            Text("当前层构成").font(Typo.f(Typo.xs, .medium)).foregroundStyle(Theme.textSecondary)
-            ForEach(Array(top.enumerated()), id: \.element.id) { index, entry in
-                Button { open(entry) } label: {
-                    HStack(spacing: Space.s75) {
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(SunburstPalette.color(order: index))
-                            .frame(width: 8, height: 8)
-                        Text(entry.name)
-                            .font(Typo.f(Typo.xs))
-                            .foregroundStyle(Theme.textPrimary)
-                            .lineLimit(1)
-                        Spacer(minLength: Space.s100)
-                        Text(total > 0 ? ratioText(Double(entry.footprint) / Double(total)) : "—")
-                            .font(Typo.mono(Typo.xs))
-                            .foregroundStyle(Theme.textMuted)
-                        Text(entry.footprint.sizeText)
-                            .font(Typo.mono(Typo.xs, .medium))
-                            .foregroundStyle(Theme.textSecondary)
-                            .frame(width: 76, alignment: .trailing)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .frame(maxWidth: 320)
     }
 
     private func open(_ entry: DiskEntry) {
@@ -371,58 +267,8 @@ struct AnalyzeView: View {
         }
     }
 
-    private func entryRow(_ entry: DiskEntry) -> some View {
-        let topSize = max(engine.entries.first?.footprint ?? 1, 1)
-        let ratio = Double(entry.footprint) / Double(topSize)
-        return HStack(spacing: Space.s100) {
-            Image(systemName: entry.isDirectory ? "folder" : "doc")
-                .font(Typo.f(Typo.xs))
-                .foregroundStyle(entry.isDirectory ? Theme.accent : Theme.textMuted)
-                .frame(width: 16)
-            Text(entry.name)
-                .font(Typo.f(Typo.sm))
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(1)
-            Spacer()
-            ProgressBar(value: ratio, height: 5)
-                .frame(width: 150)
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(entry.footprint.bytesText)
-                    .font(Typo.mono(Typo.xs, .medium))
-                    .foregroundStyle(Theme.textSecondary)
-                if entry.isInflated {
-                    Text("逻辑 \(entry.size.sizeText)")
-                        .font(Typo.mono(Typo.xs))
-                        .foregroundStyle(Theme.textMuted)
-                }
-            }
-            .frame(width: 84, alignment: .trailing)
-            .help(entry.isInflated
-                  ? "实际占用 \(entry.footprint.bytesText)；逻辑长度 \(entry.size.bytesText)，差额来自稀疏或克隆文件"
-                  : "实际占用 \(entry.footprint.bytesText)")
-            if entry.isDirectory {
-                SweepButton(.quiet, title: "进入") { engine.go(to: entry.path) }
-            }
-            SweepButton(.quiet, title: "废纸篓") { pendingTrash = entry }
-                .foregroundStyle(Theme.accentDanger)
-            SweepButton(.quiet, title: "显示") {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: entry.path)])
-            }
-        }
-        .padding(.horizontal, Space.s100)
-        .padding(.vertical, Space.s75)
-        .rowBackground()
-        .contentShape(Rectangle())
-        .contextMenu {
-            if entry.isDirectory {
-                Button("进入") { engine.go(to: entry.path) }
-            }
-            Button("在访达中显示") {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: entry.path)])
-            }
-            Divider()
-            Button("移入废纸篓", role: .destructive) { pendingTrash = entry }
-        }
+    private func reveal(_ entry: DiskEntry) {
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: entry.path)])
     }
 
     private func displayName(_ path: String) -> String {

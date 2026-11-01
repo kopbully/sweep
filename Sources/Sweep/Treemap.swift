@@ -86,6 +86,8 @@ struct TreemapTile: Identifiable {
 struct TreemapView: View {
     let entries: [DiskEntry]
     var onSelect: (DiskEntry) -> Void
+    var onReveal: (DiskEntry) -> Void = { _ in }
+    var onTrash: (DiskEntry) -> Void = { _ in }
     @State private var hovered: String?
     @State private var appeared = false
     @Environment(\.colorScheme) private var colorScheme
@@ -105,7 +107,7 @@ struct TreemapView: View {
                 withAnimation(Motion.base) { appeared = true }
             }
         }
-        .frame(height: 420)
+        .frame(height: 520)
         // 换一层目录就换一批块，用 id 重建来重播入场动画
         .id(signature)
     }
@@ -180,6 +182,14 @@ struct TreemapView: View {
         .onTapGesture {
             if let entry = tile.entry { onSelect(entry) }
         }
+        .contextMenu {
+            if let entry = tile.entry {
+                if entry.isDirectory { Button("进入") { onSelect(entry) } }
+                Button("在访达中显示") { onReveal(entry) }
+                Divider()
+                Button("移入废纸篓…", role: .destructive) { onTrash(entry) }
+            }
+        }
         .help(tile.inflated > 0
               ? "\(tile.label) · 占用 \(tile.size.bytesText)（逻辑长度 \((tile.size + tile.inflated).bytesText)）"
               : "\(tile.label) · \(tile.size.bytesText)")
@@ -201,165 +211,5 @@ struct TreemapView: View {
         return Color(hue: Self.hues[slot],
                      saturation: colorScheme == .dark ? 0.44 : 0.38,
                      brightness: ramp[index % ramp.count])
-    }
-}
-
-// MARK: - 旭日图
-
-struct RingSegment: Shape {
-    var startAngle: Double
-    var endAngle: Double
-    var innerRatio: CGFloat
-    var outerRatio: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let radius = min(rect.width, rect.height) / 2
-        let inner = radius * innerRatio
-        let outer = radius * outerRatio
-        var path = Path()
-        path.addArc(center: center, radius: outer,
-                    startAngle: .degrees(startAngle), endAngle: .degrees(endAngle), clockwise: false)
-        path.addArc(center: center, radius: inner,
-                    startAngle: .degrees(endAngle), endAngle: .degrees(startAngle), clockwise: true)
-        path.closeSubpath()
-        return path
-    }
-}
-
-struct SunburstSegment: Identifiable {
-    let id: String
-    let entry: DiskEntry?
-    let label: String
-    /// 实际占用
-    let size: Int64
-    /// 逻辑长度比实际占用多出的部分
-    let inflated: Int64
-    let start: Double
-    let end: Double
-    let ring: Int
-    let order: Int
-}
-
-struct SunburstView: View {
-    /// 由内到外的每一层，最后一层是当前目录
-    let levels: [[DiskEntry]]
-    var onSelect: (DiskEntry) -> Void
-
-    @State private var hovered: String?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var segments: [SunburstSegment] {
-        var out: [SunburstSegment] = []
-        for (ringIndex, level) in levels.enumerated() {
-            let total = level.reduce(Int64(0)) { $0 + max($1.footprint, 0) }
-            guard total > 0 else { continue }
-            var angle = -90.0
-            for (order, entry) in level.sorted(by: { $0.footprint > $1.footprint }).enumerated() {
-                let span = 360.0 * Double(entry.footprint) / Double(total)
-                let gap = span > 1.2 ? 0.6 : 0
-                out.append(SunburstSegment(
-                    id: "\(ringIndex)-\(entry.id)",
-                    entry: entry,
-                    label: entry.name,
-                    size: entry.footprint,
-                    inflated: entry.inflated,
-                    start: angle + gap / 2,
-                    end: angle + span - gap / 2,
-                    ring: ringIndex,
-                    order: order))
-                angle += span
-            }
-        }
-        return out
-    }
-
-    private var hoveredSegment: SunburstSegment? {
-        guard let hovered else { return nil }
-        return segments.first { $0.id == hovered }
-    }
-
-    var body: some View {
-        ZStack {
-            ForEach(segments) { segment in
-                let count = max(levels.count, 1)
-                let inner = 0.34 + 0.56 * (CGFloat(segment.ring) / CGFloat(count))
-                let base = 0.34 + 0.56 * (CGFloat(segment.ring + 1) / CGFloat(count))
-                let isHovered = hovered == segment.id
-                // 悬停时这一瓣向外探出一点，其余瓣一起退到后面
-                let outer = base + (isHovered ? 0.022 : 0)
-                let dimmed = hovered != nil && !isHovered
-                let shape = RingSegment(startAngle: segment.start, endAngle: segment.end,
-                                        innerRatio: inner,
-                                        outerRatio: max(outer - 0.012, inner + 0.01))
-                let tint = color(for: segment, hovered: isHovered)
-                shape
-                    .fill(tint)
-                    .overlay(shape.stroke(Theme.bg, lineWidth: 1.5))
-                    .shadow(color: isHovered ? Color.black.opacity(0.18) : .clear,
-                            radius: isHovered ? 4 : 0, x: 0, y: 1)
-                    .opacity(dimmed ? 0.45 : 1)
-                    .zIndex(isHovered ? 2 : 1)
-                    .onHover { hovering in
-                        withAnimation(Motion.quick) { hovered = hovering ? segment.id : nil }
-                    }
-                    .onTapGesture {
-                        if let entry = segment.entry { onSelect(entry) }
-                    }
-                    .help(segment.inflated > 0
-                          ? "\(segment.label) · 占用 \(segment.size.bytesText)（逻辑长度 \((segment.size + segment.inflated).bytesText)）"
-                          : "\(segment.label) · \(segment.size.bytesText)")
-                    .animation(reduceMotion ? .none : Motion.quick, value: hovered)
-            }
-            center
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .frame(maxHeight: 400)
-        .padding(Space.s200)
-    }
-
-    private var center: some View {
-        let total = levels.last?.reduce(Int64(0)) { $0 + max($1.footprint, 0) } ?? 0
-        let item = hoveredSegment
-        let value = item?.size ?? total
-        let share = item != nil && total > 0 ? Double(item!.size) / Double(total) : nil
-        return VStack(spacing: Space.s25) {
-            Text(item?.label ?? "当前层")
-                .font(Typo.f(Typo.xs))
-                .foregroundStyle(Theme.textSecondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            TickerText(text: value.sizeText,
-                       font: Typo.mono(Typo.lg, .semibold),
-                       color: Theme.textPrimary)
-            if let share {
-                Text(ratioText(share))
-                    .font(Typo.f(Typo.xs, .medium))
-                    .foregroundStyle(Theme.accent)
-                    .contentTransition(.numericText())
-                    .animation(Motion.base, value: share)
-            } else {
-                Text("点分段进入")
-                    .font(Typo.f(Typo.xs))
-                    .foregroundStyle(Theme.textMuted)
-            }
-        }
-        .padding(Space.s75)
-        .allowsHitTesting(false)
-    }
-
-    private func color(for segment: SunburstSegment, hovered: Bool) -> Color {
-        if hovered { return Theme.accent }
-        return SunburstPalette.color(order: segment.order, ring: segment.ring)
-    }
-}
-
-/// 旭日图与图例共用一套明度阶梯，保证颜色一一对应
-enum SunburstPalette {
-    static let ramp: [Double] = [0.88, 0.68, 0.54, 0.44, 0.36, 0.3, 0.25, 0.21]
-
-    static func color(order: Int, ring: Int = 0) -> Color {
-        let depth = 1.0 - Double(ring) * 0.16
-        return Theme.accent.opacity(max(0.16, ramp[order % ramp.count] * depth))
     }
 }
