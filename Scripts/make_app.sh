@@ -17,13 +17,6 @@ cp "$BINARY" "$APP/Contents/MacOS/Sweep"
 mkdir -p "$APP/Contents/Resources"
 ditto "Sources/Sweep/Resources/BlackHole" "$APP/Contents/Resources/BlackHole"
 ditto "Sources/Sweep/Resources/ThirdParty" "$APP/Contents/Resources/ThirdParty"
-# 图标由 Sources/Sweep/IconArt.swift 生成（Scripts/make_icon.swift），每次打包都重新导出，保证与 App 内 Logo 一致
-mkdir -p .build
-swiftc -O -parse-as-library -module-cache-path .build/clang-cache \
-    Sources/Sweep/IconArt.swift Scripts/make_icon.swift -o .build/make_icon
-rm -rf .build/AppIcon.iconset
-.build/make_icon .build/AppIcon.iconset >/dev/null
-iconutil -c icns .build/AppIcon.iconset -o Sources/Sweep/Resources/AppIcon.icns
 [ -f "Sources/Sweep/Resources/AppIcon.icns" ] && cp "Sources/Sweep/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
