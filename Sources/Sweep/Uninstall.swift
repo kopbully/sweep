@@ -228,7 +228,9 @@ final class UninstallEngine: ObservableObject {
             }
 
             let url = URL(fileURLWithPath: app.path)
-            if (try? FileManager.default.trashItem(at: url, resultingItemURL: nil)) != nil {
+            var trashedURL: NSURL?
+            if (try? FileManager.default.trashItem(at: url, resultingItemURL: &trashedURL)) != nil {
+                if let destination = trashedURL as URL? { Remover.trashObserver?(app.path, destination) }
                 s.trashed += 1
                 s.appBytes += app.size
                 OperationsLog.write("TRASH(app) \(app.path)")

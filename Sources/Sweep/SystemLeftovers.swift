@@ -109,8 +109,11 @@ enum SystemLeftovers {
     }
 
     static func removeWithAdministrator(_ path: String) throws {
-        let quoted = "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
-        let source = "do shell script \"rm -rf \(quoted)\" with administrator privileges"
+        // 与 Remover.adminRemove 共用同一套引号转义（含 AppleScript 层的 \ 与 "）
+        guard Remover.adminRemovalAllowed(path) else {
+            throw RemovalError.authorizationFailed("拒绝删除受保护路径")
+        }
+        let source = Remover.adminRemovalScript(path)
         guard let script = NSAppleScript(source: source) else {
             throw RemovalError.authorizationFailed("无法创建授权脚本")
         }

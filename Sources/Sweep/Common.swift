@@ -101,6 +101,10 @@ enum Remover {
         case permanent  // 永久删除
     }
 
+    /// 测试钩子：每次成功移入废纸篓时回调 (原路径, 废纸篓中的位置)，
+    /// 让验收脚本能找回自己的夹具而无需读取受隐私保护的 ~/.Trash 目录。
+    nonisolated(unsafe) static var trashObserver: ((String, URL) -> Void)?
+
     /// 返回是否有失败项。调用方负责先确认。
     /// extraAllow 用于隐私清理等场景：只放行调用方自己声明的具体路径，
     /// 不影响全局白名单，也不会绕过 exact 级保护（如 ~/Library 本身）。
@@ -126,6 +130,7 @@ enum Remover {
             case .trash:
                 do {
                     try FileManager.default.trashItem(at: url, resultingItemURL: &resultURL)
+                    if let destination = resultURL as URL? { trashObserver?(url.path, destination) }
                     removed += 1
                     OperationsLog.write("TRASH \(url.path)")
                 } catch {
@@ -146,12 +151,59 @@ enum Remover {
         return (removed, failed)
     }
 
-    /// 需要管理员权限的删除（用于 /Applications 等场景失败时的回退）
-    static func adminRemove(_ path: String) throws {
-        let escaped = path.replacingOccurrences(of: "\\", with: "\\\\")
+    enum AdminRemovalError: LocalizedError {
+        case refused(String)
+        case failed(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .refused(let path): return "拒绝以管理员身份删除受保护或不明确的路径：\(path)"
+            case .failed(let message): return message
+            }
+        }
+    }
+
+    /// 管理员删除前的路径闸门：必须是规范化的绝对路径、至少两级深、不在保护清单上。
+    static func adminRemovalAllowed(_ path: String) -> Bool {
+        guard path.hasPrefix("/"), !path.contains("\0") else { return false }
+        let std = (path as NSString).standardizingPath
+        guard std == path || std + "/" == path else { return false }   // 不接受 ..、//、~ 等需要解释的写法
+        guard std.split(separator: "/").count >= 2 else { return false }
+        if PathSafety.isProtected(std) { return false }
+        let home = (NSHomeDirectory() as NSString).standardizingPath
+        if std == home { return false }
+        return true
+    }
+
+    /// 生成 `rm -rf -- '<path>'` 的 AppleScript 源码。
+    /// shell 层用单引号包裹并把内部单引号写成 '\''；AppleScript 字符串层再转义 \ 与 "。
+    /// 旧实现只做了后者，路径里带单引号（如 "Bob's App.app"）就能拆开引号、注入额外参数。
+    static func adminRemovalScript(_ path: String) -> String {
+        let shellQuoted = "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        let command = "/bin/rm -rf -- " + shellQuoted
+        let appleScriptEscaped = command
+            .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
-        let script = "do shell script \"rm -rf '\(escaped)'\" with administrator privileges"
-        try NSAppleScript(source: script)?.executeAndReturnError(nil)
+        return "do shell script \"\(appleScriptEscaped)\" with administrator privileges"
+    }
+
+    /// 需要管理员权限的删除（仅用于卸载 /Applications 下不可写的应用等明确场景）。
+    /// 失败或用户取消授权时抛错，调用方不会再把它误记为“已删除”。
+    static func adminRemove(_ path: String) throws {
+        guard adminRemovalAllowed(path) else {
+            OperationsLog.write("SKIP(admin-protected) \(path)")
+            throw AdminRemovalError.refused(path)
+        }
+        guard let script = NSAppleScript(source: adminRemovalScript(path)) else {
+            throw AdminRemovalError.failed("无法创建授权脚本")
+        }
+        var error: NSDictionary?
+        script.executeAndReturnError(&error)
+        if let error {
+            let message = (error[NSAppleScript.errorMessage] as? String) ?? "授权或删除失败"
+            OperationsLog.write("FAIL(admin-delete) \(path): \(message)")
+            throw AdminRemovalError.failed(message)
+        }
         OperationsLog.write("ADMIN-DELETE \(path)")
     }
 }

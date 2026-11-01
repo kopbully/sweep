@@ -9,6 +9,8 @@ struct OptimizeTask: Identifiable {
     let detail: String
     let icon: String
     let needsAdmin: Bool
+    /// 不可恢复的动作（如清空废纸篓）：不进“一键维护”，单独运行前必须确认
+    var irreversible: Bool = false
 }
 
 enum OptimizeCatalog {
@@ -24,7 +26,7 @@ enum OptimizeCatalog {
             icon: "doc.plaintext", needsAdmin: false),
         OptimizeTask(id: "trashEmpty", title: "清空废纸篓",
             detail: "删除所有废纸篓内容，释放的空间立即生效。此操作不可恢复。",
-            icon: "trash", needsAdmin: false),
+            icon: "trash", needsAdmin: false, irreversible: true),
         OptimizeTask(id: "downloads", title: "清理下载目录里的安装包",
             detail: "把 ~/Downloads 中的 .dmg、.pkg、.zip 安装包移入废纸篓——装完就该扔。",
             icon: "shippingbox", needsAdmin: false),
@@ -32,6 +34,9 @@ enum OptimizeCatalog {
             detail: "删除 /private/var/log 中 30 天以前的系统日志。需要一次管理员密码。",
             icon: "terminal", needsAdmin: true),
     ]
+
+    /// 一键维护包含的任务：免密码且可恢复/低风险
+    static var oneClickTasks: [OptimizeTask] { tasks.filter { !$0.needsAdmin && !$0.irreversible } }
 
     /// 统一执行入口：done 会在主线程回调
     static func execute(task: OptimizeTask, done: @escaping @Sendable (String, Bool) -> Void) {
@@ -81,6 +86,9 @@ enum OptimizeCatalog {
             var st = stat()
             guard stat(full, &st) == 0 else { continue }
             let mtime = Date(timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec))
+            // 只收普通文件：旧实现把 30 天没改过的“目录”也收进来，
+            // 永久删除时会连同里面新写入的日志一起删掉
+            guard (st.st_mode & S_IFMT) == S_IFREG else { continue }
             if mtime < cutoff { result.append(full) }
         }
         return result
@@ -115,6 +123,7 @@ private func runAdmin(_ shell: String, done: @escaping @Sendable (String, Bool) 
 struct OptimizeView: View {
     @StateObject private var engine = OptimizeRunner()
     @State private var pendingAdmin: OptimizeTask?
+    @State private var pendingIrreversible: OptimizeTask?
 
     var body: some View {
         ScrollView {
@@ -149,6 +158,15 @@ struct OptimizeView: View {
                   },
                   secondaryButton: .cancel(Text("取消")) { pendingAdmin = nil })
         }
+        .background(EmptyView().alert(item: Binding(get: { pendingIrreversible }, set: { pendingIrreversible = $0 })) { task in
+            Alert(title: Text("「\(task.title)」无法撤销"),
+                  message: Text(task.detail + "\n\n之前移入废纸篓、本来可以恢复的文件也会被永久删除。"),
+                  primaryButton: .destructive(Text("永久删除")) {
+                      if let task = pendingIrreversible { engine.run(task: task) }
+                      pendingIrreversible = nil
+                  },
+                  secondaryButton: .cancel(Text("取消")) { pendingIrreversible = nil })
+        })
     }
 
     private var runAllCard: some View {
@@ -158,7 +176,7 @@ struct OptimizeView: View {
                     Text("一键维护")
                         .font(.system(size: 21, weight: .heavy, design: .rounded))
                         .foregroundStyle(Theme.textPrimary)
-                    Text("免费任务会自动运行；需要管理员密码的任务会先弹出系统授权窗口。")
+                    Text("自动运行无需密码、可恢复的维护任务；清空废纸篓和需要管理员密码的任务请在下方单独运行。")
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -218,6 +236,8 @@ struct OptimizeView: View {
                 Button {
                     if engine.runningTask == nil, task.needsAdmin {
                         pendingAdmin = task
+                    } else if engine.runningTask == nil, task.irreversible {
+                        pendingIrreversible = task
                     } else {
                         engine.run(task: task)
                     }
@@ -253,7 +273,9 @@ final class OptimizeRunner: ObservableObject {
 
     func runAll() {
         guard runningTask == nil else { return }
-        let freeTasks = OptimizeCatalog.tasks.filter { !$0.needsAdmin }
+        // 一键维护只跑免密码且可恢复/低风险的任务；清空废纸篓会让其他模块
+        // “已移入废纸篓，可恢复”的承诺失效，必须用户单独确认
+        let freeTasks = OptimizeCatalog.oneClickTasks
         runningTask = "一键维护"
         executeChain(freeTasks, index: 0) { [weak self] in
             DispatchQueue.main.async { self?.runningTask = nil }

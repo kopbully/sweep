@@ -158,6 +158,7 @@ struct AnalyzeView: View {
     @ObservedObject var engine: AnalyzeEngine
     @AppStorage("analyzeLens") private var lens: DiskLens = .list
     @State private var pendingTrash: DiskEntry?
+    @State private var trashError: String?
 
     var body: some View {
         ScrollView {
@@ -180,16 +181,24 @@ struct AnalyzeView: View {
             Alert(title: Text("移入废纸篓？"),
                   message: Text("\(entry.name)（\(entry.size.bytesText)）"),
                   primaryButton: .destructive(Text("移入废纸篓")) {
+                      // 只走废纸篓：旧实现在失败（包括被 PathSafety 拒绝的受保护目录）时
+                      // 回退到管理员 rm -rf，等于把“可恢复”悄悄变成了永久删除并绕过保护清单。
                       let result = Remover.remove([entry.path], mode: .trash)
-                      if result.failed > 0, engine.trail.count > 1 {
-                          try? Remover.adminRemove(entry.path)
+                      if result.removed > 0 {
+                          OperationHistory.record(kind: .trash,
+                                                  summary: "移入废纸篓：\(shortPath(entry.path))",
+                                                  bytes: entry.size, count: 1)
+                      } else {
+                          trashError = "没能移入废纸篓：\(entry.name)。受保护的目录或没有权限的位置不会被删除。"
                       }
-                      OperationHistory.record(kind: .trash,
-                                              summary: "移入废纸篓：\(shortPath(entry.path))",
-                                              bytes: entry.size, count: 1)
                       engine.scan()
                   },
                   secondaryButton: .cancel(Text("取消")))
+        }
+        .alert("未删除", isPresented: Binding(get: { trashError != nil }, set: { if !$0 { trashError = nil } })) {
+            Button("好") { trashError = nil }
+        } message: {
+            Text(trashError ?? "")
         }
     }
 
