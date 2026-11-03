@@ -3,6 +3,15 @@
 > 参考 [Nivo](https://app.nivoclean.com)（Mole CLI 的商业壳）的产品思路，用 **Swift + SwiftUI** 做的本地原生桌面应用。无遥测、不联网，所有扫描与文件操作都在本机完成。
 
 <p align="center">
+  <a href="https://github.com/stef19881205/sweep-macos/stargazers"><img src="https://img.shields.io/github/stars/stef19881205/sweep-macos?style=social" alt="Stars"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%2013%2B-blue" alt="平台">
+  <img src="https://img.shields.io/badge/Swift-5.9-FA7343?logo=swift&logoColor=white" alt="Swift">
+  <img src="https://img.shields.io/github/license/stef19881205/sweep-macos" alt="许可证">
+  <img src="https://img.shields.io/github/last-commit/stef19881205/sweep-macos" alt="最近提交">
+  <img src="https://img.shields.io/github/sponsors/stef19881205" alt="Sponsors">
+</p>
+
+<p align="center">
   <img src="docs/black-hole-demo.gif" alt="Sweep 桌面黑洞：拖入文件即被吸入废纸篓" width="340">
 </p>
 
@@ -137,6 +146,23 @@ open Sweep.app
 ```
 
 要求：macOS 13+，Apple Command Line Tools（无需完整 Xcode）。
+
+## 支持与赞助
+
+Sweep 完全在本机运行、无遥测、不联网，开发与维护需要持续投入。如果你觉得它有用，欢迎用以下方式支持：
+
+- ❤️ **GitHub Sponsors**：点击仓库右上角「Sponsor」成为赞助者，按月支持持续开发（开启方式见 `.github/FUNDING.yml`）。
+- ☕ **请我喝杯咖啡 / 爱发电**：在 `FUNDING.yml` 里填入你的 Patreon / Ko-fi / 爱发电 等链接后，仓库会自动展示赞助入口。
+- ⭐ **Star 与分享**：给仓库点个 Star，把「桌面黑洞」的体验分享出去，就是最好的支持。
+- 🐛 **反馈与共建**：在 Issues 里报告问题或建议，帮助它变得更好。
+
+> 赞助者将获得优先级支持，并可能影响后续功能路线。
+
+## 许可证
+
+本项目以 **MIT 许可证** 开源（详见仓库根目录 `LICENSE` 文件）：你可以自由使用、修改、再分发本项目的源代码；若用于商业产品，请保留版权与许可声明。作者不对使用后果承担责任。
+
+如需其他授权方式（例如商业闭源授权、非商业限制），欢迎通过 Issues 联系。
 
 ## 0.7.3 数据：稀疏文件不再虚报体积
 
