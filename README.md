@@ -17,28 +17,87 @@ Sweep 在你桌面上藏了一个会发光的 **黑洞**——把任意文件或
 - **克制与安全**：此入口不使用永久删除或管理员回退；关键目录与凭据位置受到保护，误拖也有反悔余地。
 
 <p align="center">
-  <img src="docs/app-overview.png" alt="Sweep 主界面" width="760">
+  <img src="docs/app-overview.jpg" alt="Sweep 主界面" width="760">
 </p>
 
 ## 主功能一览
 
 Sweep 是一个 **完全在本机运行** 的 macOS 空间管家，把「腾空间、看状态、卸应用、清隐私」收进一个原生窗口。十一个模块按侧栏分四组：
 
-- **空间 —— 释放被占用的容量**
-  - **清理**：扫描 25 类可重建缓存（浏览器、Xcode、npm/pip/uv/Homebrew/Gradle 等），默认勾选全部可清理项，一键释放。
-  - **大文件**：按 100 MB / 500 MB / 1 GB / 5 GB 门槛找出单个大文件，边扫边出结果，批量移入废纸篓。
-  - **重复文件**：大小分桶 → 首尾摘要 → 全文件 SHA256 三段校验，只归组逐字节一致的文件。
-  - **磁盘分析**：列表 / 矩形树图 / 旭日图三种视图看空间去向，逐层钻取，右键移入废纸篓。
-- **系统 —— 看清并维护本机状态**
-  - **监控**：每秒采样 CPU、内存、磁盘、上下行流量、电池/电源，带 60 秒趋势图、健康分与进程列表。
-  - **优化**：DNS 刷新、缩略图清理、旧日志修剪、清空废纸篓等 6 个维护任务。
-  - **启动项**：扫描三个 LaunchAgents / LaunchDaemons 目录，用户级可停用与恢复。
-  - **内存**：应用 / 联动 / 压缩 / 交换构成、压力等级、进程排行，可调系统 `purge` 整理可回收内存。
-- **应用 —— 干净卸载**
-  - **卸载**：列出 `/Applications` 与 `~/Applications` 应用，按 Bundle ID／应用名找出 `~/Library` 残留，本体与残留一起进废纸篓。
-- **记录 —— 可追溯、可清理痕迹**
-  - **隐私清理**：浏览器缓存 / 历史 / Cookie、最近使用、崩溃报告、Shell 历史、剪贴板，按安全等级分级。
-  - **操作历史**：每次删除与系统改动写入结构化日志，按天分组、按类型筛选、可导出 CSV。
+### 🧹 空间 —— 释放被占用的容量
+
+<table>
+<tr><td width="280" valign="top"><img src="docs/feature-clean.jpg" width="280" alt="清理"></td><td valign="top">
+
+**清理** — 扫描 25 类可重建缓存（浏览器、Xcode、npm/pip/uv/Homebrew/Gradle 等），默认勾选全部可清理项，一键释放。
+
+</td></tr>
+<tr><td width="280" valign="top"><img src="docs/feature-large-files.jpg" width="280" alt="大文件"></td><td valign="top">
+
+**大文件** — 按 100 MB / 500 MB / 1 GB / 5 GB 门槛找出单个大文件，边扫边出结果，批量移入废纸篓。
+
+</td></tr>
+<tr><td width="280" valign="top"><img src="docs/feature-duplicates.jpg" width="280" alt="重复文件"></td><td valign="top">
+
+**重复文件** — 大小分桶 → 首尾 64 KB 摘要 → 全文件 SHA256 三段校验，只归组逐字节一致的文件。
+
+</td></tr>
+<tr><td width="280" valign="top"><img src="docs/feature-analyze.jpg" width="280" alt="磁盘分析"></td><td valign="top">
+
+**磁盘分析** — 列表 / 矩形树图 / 旭日图三种视图看空间去向，逐层钻取，右键移入废纸篓。
+
+</td></tr>
+</table>
+
+### ⚙️ 系统 —— 看清并维护本机状态
+
+<table>
+<tr><td width="280" valign="top"><img src="docs/feature-status.jpg" width="280" alt="监控"></td><td valign="top">
+
+**监控** — 每秒采样 CPU、内存、磁盘、上下行流量、电池/电源，带 60 秒趋势图、健康分与进程列表。
+
+</td></tr>
+<tr><td width="280" valign="top"><img src="docs/feature-optimize.jpg" width="280" alt="优化"></td><td valign="top">
+
+**优化** — DNS 刷新、缩略图清理、旧日志修剪、清空废纸篓等 6 个维护任务。
+
+</td></tr>
+<tr><td width="280" valign="top"><img src="docs/feature-startup.jpg" width="280" alt="启动项"></td><td valign="top">
+
+**启动项** — 扫描三个 LaunchAgents / LaunchDaemons 目录，用户级可停用与恢复。
+
+</td></tr>
+<tr><td width="280" valign="top"><img src="docs/feature-memory.jpg" width="280" alt="内存"></td><td valign="top">
+
+**内存** — 应用 / 联动 / 压缩 / 交换构成、压力等级、进程排行，可调用系统 `purge` 整理可回收内存。
+
+</td></tr>
+</table>
+
+### 🗑️ 应用 —— 干净卸载
+
+<table>
+<tr><td width="280" valign="top"><img src="docs/feature-uninstall.jpg" width="280" alt="卸载"></td><td valign="top">
+
+**卸载** — 列出 `/Applications` 与 `~/Applications` 应用，按 Bundle ID／应用名找出 `~/Library` 残留，本体与残留一起进废纸篓。
+
+</td></tr>
+</table>
+
+### 📝 记录 —— 可追溯、可清理痕迹
+
+<table>
+<tr><td width="280" valign="top"><img src="docs/feature-privacy.jpg" width="280" alt="隐私清理"></td><td valign="top">
+
+**隐私清理** — 浏览器缓存 / 历史 / Cookie、最近使用、崩溃报告、Shell 历史、剪贴板，按安全等级分级。
+
+</td></tr>
+<tr><td width="280" valign="top"><img src="docs/feature-history.jpg" width="280" alt="操作历史"></td><td valign="top">
+
+**操作历史** — 每次删除与系统改动写入结构化日志，按天分组、按类型筛选、可导出 CSV。
+
+</td></tr>
+</table>
 
 ## 5 秒上手
 
