@@ -3,11 +3,11 @@
 > 参考 [Nivo](https://app.nivoclean.com)（Mole CLI 的商业壳）的产品思路，用 **Swift + SwiftUI** 做的本地原生桌面应用。无遥测、不联网，所有扫描与文件操作都在本机完成。
 
 <p align="center">
-  <a href="https://github.com/kopbully/sweep-macos/stargazers"><img src="https://img.shields.io/github/stars/kopbully/sweep-macos?style=social" alt="Stars"></a>
+  <a href="https://github.com/kopbully/sweep/stargazers"><img src="https://img.shields.io/github/stars/kopbully/sweep?style=social" alt="Stars"></a>
   <img src="https://img.shields.io/badge/platform-macOS%2013%2B-blue" alt="平台">
   <img src="https://img.shields.io/badge/Swift-5.9-FA7343?logo=swift&logoColor=white" alt="Swift">
-  <img src="https://img.shields.io/github/license/kopbully/sweep-macos" alt="许可证">
-  <img src="https://img.shields.io/github/last-commit/kopbully/sweep-macos" alt="最近提交">
+  <img src="https://img.shields.io/github/license/kopbully/sweep" alt="许可证">
+  <img src="https://img.shields.io/github/last-commit/kopbully/sweep" alt="最近提交">
   <img src="https://img.shields.io/github/sponsors/kopbully" alt="Sponsors">
 </p>
 
@@ -360,3 +360,12 @@ Sources/Sweep/
 ```
 
 MIT License。
+
+## 关于
+
+本项目由 **kopbully** 维护，所有相关账号统一为同一身份：
+
+- **GitHub**：[@kopbully](https://github.com/kopbully) —— 源码、Issue、Sponsors 均在 `kopbully/sweep`。
+- **关联 Google 账号**：`kopbully@gmail.com` —— 用于本项目封面等资源的生成（如 Gemini 端封面制作），与 GitHub 身份一致。
+
+如需反馈问题或交流，优先使用 GitHub Issues；也欢迎通过 [Sponsors](#支持与赞助) 支持持续开发。
