@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/Swift-5.9-FA7343?logo=swift&logoColor=white" alt="Swift">
   <img src="https://img.shields.io/github/license/kopbully/sweep" alt="许可证">
   <img src="https://img.shields.io/github/last-commit/kopbully/sweep" alt="最近提交">
-  <img src="https://img.shields.io/github/sponsors/kopbully" alt="Sponsors">
+  <!-- GitHub Sponsors 暂不支持中国大陆收款（Stripe 限制），赞助入口改用国内渠道，见「支持与赞助」章节 -->
 </p>
 
 <p align="center">
@@ -155,8 +155,10 @@ open Sweep.app
 
 Sweep 完全在本机运行、无遥测、不联网，开发与维护需要持续投入。如果你觉得它有用，欢迎用以下方式支持：
 
-- ❤️ **GitHub Sponsors**：点击仓库右上角「Sponsor」成为赞助者，按月支持持续开发（开启方式见 `.github/FUNDING.yml`）。
-- ☕ **请我喝杯咖啡 / 爱发电**：在 `FUNDING.yml` 里填入你的 Patreon / Ko-fi / 爱发电 等链接后，仓库会自动展示赞助入口。
+> ⚠️ **关于 GitHub Sponsors**：其收款底层为 Stripe，而 Stripe 暂不支持中国大陆个人收款，因此本账号无法开通 GitHub Sponsors。本仓库改用下方国内渠道。
+
+- ❤️ **爱发电（推荐）**：[点击赞助](https://afdian.com/a/你的ID)（微信 / 支付宝，按月或单次支持持续开发，替换为你自己的爱发电 ID）。
+- ☕ **微信 / 支付宝赞赏**：见下方二维码（把赞赏码图片发我即可放上，或直接扫码）。
 - ⭐ **Star 与分享**：给仓库点个 Star，把「桌面黑洞」的体验分享出去，就是最好的支持。
 - 🐛 **反馈与共建**：在 Issues 里报告问题或建议，帮助它变得更好。
 
@@ -369,7 +371,7 @@ MIT License。
 
 本项目由 **kopbully** 维护，所有相关账号统一为同一身份：
 
-- **GitHub**：[@kopbully](https://github.com/kopbully) —— 源码、Issue、Sponsors 均在 `kopbully/sweep`。
+- **GitHub**：[@kopbully](https://github.com/kopbully) —— 源码、Issue 均在 `kopbully/sweep`。
 - **关联 Google 账号**：`kopbully@gmail.com` —— 用于本项目封面等资源的生成（如 Gemini 端封面制作），与 GitHub 身份一致。
 
-如需反馈问题或交流，优先使用 GitHub Issues；也欢迎通过 [Sponsors](#支持与赞助) 支持持续开发。
+如需反馈问题或交流，优先使用 GitHub Issues；也欢迎通过 [支持与赞助](#支持与赞助) 支持持续开发。

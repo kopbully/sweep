@@ -1,10 +1,7 @@
 # 赞助方式配置
-# 在 GitHub 启用 Sponsors 后，仓库右上角会出现「Sponsor」按钮
-github: kopbully
-
-# 想加第三方赞助链接，取消注释并替换为你的地址：
-# patreon: yourname
-# ko_fi: yourname
+# 重要：GitHub Sponsors 暂不支持中国大陆收款（底层 Stripe 限制），故本仓库走国内渠道。
+# 仓库「Sponsor」按钮会跳转到下面的 custom 链接。
+# 取消注释并填入你的国内赞助主页后生效：
 # custom:
-#   - "https://afdian.com/a/yourname"   # 爱发电
-#   - "https://buymeacoffee.com/yourname"
+#   - "https://afdian.com/a/你的ID"        # 爱发电（微信 / 支付宝）
+#   - "https://your-custom-pay-link"       # 其他（如微信 / 支付宝赞赏码页）
