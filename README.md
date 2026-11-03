@@ -3,7 +3,7 @@
 > 参考 [Nivo](https://app.nivoclean.com)（Mole CLI 的商业壳）的产品思路，用 **Swift + SwiftUI** 做的本地原生桌面应用。无遥测、不联网，所有扫描与文件操作都在本机完成。
 
 <p align="center">
-  <img src="docs/black-hole.png" alt="Sweep 桌面黑洞" width="340">
+  <img src="docs/black-hole-demo.gif" alt="Sweep 桌面黑洞：拖入文件即被吸入废纸篓" width="340">
 </p>
 
 ## ✨ 桌面黑洞：把文件拖进黑洞，安静地消失
