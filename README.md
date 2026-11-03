@@ -1,5 +1,9 @@
 # Sweep — 安静的 macOS 空间管家
 
+<p align="center">
+  <img src="docs/logo.jpg" alt="Sweep 图标" width="160">
+</p>
+
 > 参考 [Nivo](https://app.nivoclean.com)（Mole CLI 的商业壳）的产品思路，用 **Swift + SwiftUI** 做的本地原生桌面应用。无遥测、不联网，所有扫描与文件操作都在本机完成。
 
 <p align="center">
