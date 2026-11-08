@@ -233,7 +233,8 @@ struct ShellView: View {
         case .optimize: OptimizeView()
         case .startup: StartupView()
         case .memory: MemoryView()
-        case .uninstall: UninstallView(engine: uninstallEngine, devEngine: devLeftoverEngine)
+        case .uninstall: UninstallView(engine: uninstallEngine)
+        case .leftovers: LeftoversView(engine: uninstallEngine, devEngine: devLeftoverEngine)
         case .privacy: PrivacyView()
         case .history: HistoryView()
         }

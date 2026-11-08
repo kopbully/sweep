@@ -3,7 +3,7 @@ import Foundation
 enum Module: String, Hashable, CaseIterable, Identifiable {
     case clean, largeFiles, duplicates, analyze
     case status, optimize, startup, memory
-    case uninstall, privacy, history
+    case uninstall, leftovers, privacy, history
 
     var id: String { rawValue }
 
@@ -18,6 +18,7 @@ enum Module: String, Hashable, CaseIterable, Identifiable {
         case .startup: return "启动项"
         case .memory: return "内存"
         case .uninstall: return "卸载"
+        case .leftovers: return "残留清理"
         case .privacy: return "隐私清理"
         case .history: return "操作历史"
         }
@@ -34,6 +35,7 @@ enum Module: String, Hashable, CaseIterable, Identifiable {
         case .startup: return "power"
         case .memory: return "memorychip"
         case .uninstall: return "xmark.bin"
+        case .leftovers: return "arrow.3.trianglepath"
         case .privacy: return "hand.raised"
         case .history: return "clock.arrow.circlepath"
         }
@@ -50,6 +52,7 @@ enum Module: String, Hashable, CaseIterable, Identifiable {
         case .startup: return "管理登录与开机自动运行的后台程序"
         case .memory: return "看清谁在吃内存，回收可释放部分"
         case .uninstall: return "把应用连同它的残留一起清干净"
+        case .leftovers: return "agent 残留 · 构建缓存 · 废弃项目"
         case .privacy: return "清掉浏览器与系统留下的痕迹"
         case .history: return "每一次删除都有据可查"
         }
@@ -64,7 +67,7 @@ struct ModuleGroup: Identifiable {
     static let all: [ModuleGroup] = [
         ModuleGroup(id: "space", title: "空间", modules: [.clean, .largeFiles, .duplicates, .analyze]),
         ModuleGroup(id: "system", title: "系统", modules: [.status, .optimize, .startup, .memory]),
-        ModuleGroup(id: "apps", title: "应用", modules: [.uninstall]),
+        ModuleGroup(id: "apps", title: "应用", modules: [.uninstall, .leftovers]),
         ModuleGroup(id: "record", title: "记录", modules: [.privacy, .history]),
     ]
 }
