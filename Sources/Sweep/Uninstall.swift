@@ -25,6 +25,7 @@ struct AppObject: Identifiable, Hashable {
 struct OrphanApp: Identifiable, Hashable {
     let id: String            // bundle id；通用发现时为 generic:<位置>/<目录名>
     let name: String
+    let subtitle: String      // 中文说明，帮用户辨认这是什么
     let items: [AppObject]
     var size: Int64 { items.reduce(0) { $0 + $1.size } }
 }
@@ -292,26 +293,37 @@ final class UninstallEngine: ObservableObject {
     @Published var orphanBundles: [OrphanApp] = []
     @Published var selectedOrphans: Set<String> = []
     @Published var scanningOrphans = false
+    /// 最近一次孤儿扫描完成时间，用于空态时向用户证明"扫过了、确实没有"
+    @Published var orphansScannedAt: Date? = nil
     @Published var includeGenericOrphans = false
 
     private struct AppSignature { let bundleID: String; let name: String }
 
     /// 已知「已卸载但可能仍有残留」的应用（清单模式，立即可用、安全可控）。
-    /// extraPaths 是 app 家目录下的扩展残留位置：CLI agent 常把数据放在
-    /// ~/.<name>、~/.cache/<name>、~/.local/bin/<name> 等点目录里，
+    /// zh 是给用户看的中文说明；extraPaths 是 app 家目录下的扩展残留位置：
+    /// CLI agent 常把数据放在 ~/.<name>、~/.cache/<name>、~/.local/bin/<name> 等点目录里，
     /// 这些不在 leftoverDirs（~/Library）覆盖范围内，单独枚举。
-    private static let knownOrphanApps: [(bundleID: String, names: [String], extraPaths: [String])] = [
-        (bundleID: "ai.openclaw.mac", names: ["OpenClaw", "openclaw"], extraPaths: [
+    private static let knownOrphanApps: [(bundleID: String, names: [String], zh: String, extraPaths: [String])] = [
+        (bundleID: "ai.openclaw.mac", names: ["OpenClaw", "openclaw"],
+         zh: "OpenClaw · AI 编程 agent，残留含网关日志、缓存与配置",
+         extraPaths: [
             ".openclaw", ".clawdbot",
             ".cache/openclaw", ".config/openclaw", ".local/share/openclaw", ".local/state/openclaw",
             ".local/bin/openclaw", ".local/bin/openclaw-gateway",
         ]),
-        (bundleID: "com.nousresearch.hermes", names: ["Hermes", "hermes-desktop"], extraPaths: [
+        (bundleID: "com.nousresearch.hermes", names: ["Hermes", "hermes-desktop"],
+         zh: "Hermes · AI 桌面助手，残留含会话数据、缓存与命令行启动 shim",
+         extraPaths: [
             ".hermes",
             ".cache/hermes", ".config/hermes", ".local/share/hermes", ".local/state/hermes",
             ".local/bin/hermes",
         ]),
     ]
+
+    /// 已收录应用的中文名单（供「残留清理」空态展示，让用户知道覆盖了哪些）
+    static var knownOrphanDescriptions: [String] {
+        knownOrphanApps.map { "\($0.names.first ?? $0.bundleID) —— \($0.zh)" }
+    }
 
     /// 检查一个家目录相对路径是否作为残留存在（含悬空符号链接）。
     /// FileManager.fileExists 对悬空 symlink 返回 false，所以用 attributesOfItem（lstat 语义）。
@@ -373,7 +385,8 @@ final class UninstallEngine: ObservableObject {
             var items = orphanLeftovers(for: entry.bundleID, names: entry.names)
             items.append(contentsOf: entry.extraPaths.compactMap { extraResidue(atRelative: $0) })
             guard !items.isEmpty else { return nil }
-            return OrphanApp(id: entry.bundleID, name: entry.names.first ?? entry.bundleID, items: items)
+            return OrphanApp(id: entry.bundleID, name: entry.names.first ?? entry.bundleID,
+                             subtitle: entry.zh, items: items)
         }
     }
 
@@ -399,7 +412,9 @@ final class UninstallEngine: ObservableObject {
                 let size = Sizer.footprint(full)
                 guard size > 0 else { continue }
                 collected.append(OrphanApp(id: "generic:" + rel + "/" + kid,
-                                           name: kid, items: [AppObject(path: full, size: size)]))
+                                           name: kid,
+                                           subtitle: "通用发现 · 位于 ~/Library/" + rel + "，未匹配到任何已安装应用",
+                                           items: [AppObject(path: full, size: size)]))
             }
         }
         return collected.filter { !knownIDs.contains($0.id) }
@@ -444,6 +459,7 @@ final class UninstallEngine: ObservableObject {
             DispatchQueue.main.async {
                 self.orphanBundles = all
                 self.scanningOrphans = false
+                self.orphansScannedAt = Date()
             }
         }
     }

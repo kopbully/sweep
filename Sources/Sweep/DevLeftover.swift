@@ -43,6 +43,81 @@ final class DevLeftoverEngine: ObservableObject {
         "CMakeLists.txt", "Makefile", "BUILD", "WORKSPACE", "justfile",
     ]
 
+    /// 构建缓存目录的中文名，让用户一眼看懂这是什么、删了会怎样
+    static func zhLabel(for dirName: String) -> String {
+        switch dirName {
+        case "node_modules": return "Node.js 依赖包（重新安装会再生）"
+        case ".venv", "venv": return "Python 虚拟环境（重建即可）"
+        case "target": return "Rust / Java 编译产物（重新编译会再生）"
+        case ".build": return "SwiftPM / Xcode 编译产物（重新编译会再生）"
+        case "dist", ".next", ".nuxt", "out", ".output", ".svelte-kit", ".astro":
+            return "前端打包输出（重新构建会再生）"
+        case "__pycache__": return "Python 字节码缓存（自动再生）"
+        case ".gradle": return "Gradle 构建缓存"
+        case "Pods": return "CocoaPods 依赖（pod install 会再生）"
+        case ".pytest_cache", ".mypy_cache": return "Python 工具缓存（自动再生）"
+        case ".dart_tool": return "Dart / Flutter 工具缓存"
+        case ".turbo", ".parcel-cache", ".rush": return "前端工具缓存"
+        case "coverage": return "测试覆盖率报告"
+        case ".terraform": return "Terraform 状态与插件缓存"
+        default: return "构建缓存（可重建）"
+        }
+    }
+
+    /// 建议：检测常见开发位置之外、真实含有项目的目录，供用户一键加入扫描根。
+    /// 只读检测 ~ 与 ~/Documents 的下一层子目录，每个候选用轻量探针（只走目录
+    /// 名找项目标记、不算体积）统计命中项目数，不自动添加。
+    static func suggestedRoots(existing: [String]) -> [(path: String, projects: Int)] {
+        let fm = FileManager.default
+        let home = NSHomeDirectory()
+        let skipNames: Set<String> = [
+            "Library", "Desktop", "Pictures", "Music", "Movies", "Public",
+            "Applications", "Downloads",
+        ]
+        // APFS 默认大小写不敏感，路径比较统一按小写处理，避免 ~/Projects 与 ~/projects 互不认账
+        let knownRoots = Set(existing.map { (($0 as NSString).standardizingPath).lowercased() })
+        var suggestions: [(path: String, projects: Int)] = []
+
+        for base in [home, home + "/Documents"] {
+            guard let kids = try? fm.contentsOfDirectory(atPath: base) else { continue }
+            for kid in kids where !kid.hasPrefix(".") && !skipNames.contains(kid) {
+                let full = base + "/" + kid
+                var isDir: ObjCBool = false
+                guard fm.fileExists(atPath: full, isDirectory: &isDir), isDir.boolValue else { continue }
+                let std = (full as NSString).standardizingPath
+                guard !knownRoots.contains(std.lowercased()) else { continue }
+                let hits = countProjectRoots(root: full)
+                if hits > 0 { suggestions.append((std, hits)) }
+            }
+        }
+        return suggestions.sorted { $0.projects > $1.projects }
+    }
+
+    /// 轻量探针：只遍历目录结构（≤4 层，跳过 .git 与构建缓存内部），统计项目根命中数。
+    /// 不调用 Sizer，开销远小于完整扫描，专供「建议目录」检测。
+    static func countProjectRoots(root: String) -> Int {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: root),
+              let enumerator = fm.enumerator(at: URL(fileURLWithPath: root),
+                                             includingPropertiesForKeys: nil,
+                                             options: [.skipsPackageDescendants]) else { return 0 }
+        var hits = 0
+        while let url = enumerator.nextObject() as? URL {
+            let level = enumerator.level
+            if level > 4 { enumerator.skipDescendants(); continue }
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else { continue }
+            let name = url.lastPathComponent
+            if name == ".git" || name == ".svn" || name == ".hg" {
+                enumerator.skipDescendants(); continue
+            }
+            if cacheDirNames.contains(name) { enumerator.skipDescendants(); continue }
+            guard let kids = try? fm.contentsOfDirectory(atPath: url.path) else { continue }
+            if isProjectRoot(url, kids: kids) { hits += 1 }
+        }
+        return hits
+    }
+
     // MARK: 状态
 
     @Published var roots: [String] {
@@ -57,6 +132,8 @@ final class DevLeftoverEngine: ObservableObject {
     @Published var minAgeDays: Int = 90
     @Published var lastMessage: String? = nil
     @Published var lastMessageIsWarning = false
+    /// 最近一次扫描完成时间，空结果时向用户证明"扫过了、确实没有"
+    @Published var scannedAt: Date? = nil
 
     init() {
         if let saved = UserDefaults.standard.array(forKey: "sweep.devRoots") as? [String],
@@ -138,6 +215,7 @@ final class DevLeftoverEngine: ObservableObject {
                 self.cacheItems = caches
                 self.projects = projects
                 self.scanning = false
+                self.scannedAt = Date()
             }
         }
     }
@@ -240,7 +318,8 @@ final class DevLeftoverEngine: ObservableObject {
 
     /// SWEEP_DEV_PROBE=1：打印构建缓存与项目根的命中，不做任何删除。
     static func runProbe() {
-        let expanded = DevLeftoverEngine().roots.map { ($0 as NSString).expandingTildeInPath }
+        let engine = DevLeftoverEngine()
+        let expanded = engine.roots.map { ($0 as NSString).expandingTildeInPath }
         let (caches, projects) = Self.collect(roots: expanded)
         let cacheBytes = caches.reduce(0) { $0 + $1.size }
         print("DEV_PROBE roots=\(expanded.count) caches=\(caches.count) cacheBytes=\(cacheBytes) projects=\(projects.count)")
@@ -250,6 +329,9 @@ final class DevLeftoverEngine: ObservableObject {
         for p in projects.prefix(12) {
             print("  PROJ \(p.size)\t\(formatter.string(from: p.lastModified))\t\(p.path)")
         }
+        let suggestions = suggestedRoots(existing: engine.roots)
+        print("DEV_PROBE suggestions=\(suggestions.count)")
+        for s in suggestions { print("  SUGGEST \(s.projects)\t\(s.path)") }
     }
 }
 
@@ -263,9 +345,29 @@ struct LeftoversView: View {
     @ObservedObject var devEngine: DevLeftoverEngine
     @State private var confirmCacheClean = false
     @State private var confirmProjectDelete = false
+    /// 「建议目录」：检测到的、还没加入扫描根的含项目目录
+    @State private var suggestions: [(path: String, projects: Int)] = []
 
     private func shortPath(_ path: String) -> String {
         path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+    }
+
+    /// 已收录 agent 的中文名单（空态时展示）
+    private var knownListText: [String] { UninstallEngine.knownOrphanDescriptions }
+
+    private func timeText(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.setLocalizedDateFormatFromTemplate("MMMd HH:mm")
+        return f.string(from: date)
+    }
+
+    private func loadSuggestions() {
+        let existing = devEngine.roots
+        DispatchQueue.global(qos: .utility).async {
+            let found = DevLeftoverEngine.suggestedRoots(existing: existing)
+            DispatchQueue.main.async { suggestions = found }
+        }
     }
 
     var body: some View {
@@ -287,6 +389,7 @@ struct LeftoversView: View {
         .onAppear {
             if engine.orphanBundles.isEmpty && !engine.scanningOrphans { engine.loadOrphans() }
             if devEngine.cacheItems.isEmpty && devEngine.projects.isEmpty && !devEngine.scanning { devEngine.scan() }
+            if suggestions.isEmpty { loadSuggestions() }
         }
         .alert("清理构建缓存？", isPresented: $confirmCacheClean) {
             Button("清理所选", role: .destructive) { devEngine.removeSelectedCaches() }
@@ -337,13 +440,31 @@ struct LeftoversView: View {
                 }
 
                 if engine.orphanBundles.isEmpty {
-                    Text(engine.scanningOrphans
-                         ? "正在扫描 ~/Library 各位置的孤儿残留…"
-                         : "没有发现孤儿残留。已收录清单：OpenClaw、Hermes；打开「通用发现（实验）」可扫描更多 agent / 已卸载应用在 ~/Library 的尾巴。")
-                        .font(Typo.f(Typo.xs))
-                        .foregroundStyle(Theme.textMuted)
+                    if engine.scanningOrphans {
+                        Text("正在扫描 ~/Library 各位置与家目录扩展路径的孤儿残留…")
+                            .font(Typo.f(Typo.xs))
+                            .foregroundStyle(Theme.textMuted)
+                    } else if let at = engine.orphansScannedAt {
+                        VStack(alignment: .leading, spacing: Space.s50) {
+                            Text("已于 \(timeText(at)) 完成扫描，本机没有发现下面这些已收录应用的残留：")
+                                .font(Typo.f(Typo.xs))
+                                .foregroundStyle(Theme.textMuted)
+                            ForEach(knownListText, id: \.self) { line in
+                                Text("· " + line)
+                                    .font(Typo.f(Typo.xs))
+                                    .foregroundStyle(Theme.textMuted)
+                            }
+                            Text("装的 agent 不在清单里？打开「通用发现（实验）」开关，可按签名反向匹配扫描任意已卸载应用在 ~/Library 的尾巴。")
+                                .font(Typo.f(Typo.xs))
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                    } else {
+                        Text("尚未扫描。")
+                            .font(Typo.f(Typo.xs))
+                            .foregroundStyle(Theme.textMuted)
+                    }
                 } else {
-                    Text("这些应用已不在 /Applications，但它们在 ~/Library 下的缓存、日志、偏好仍占着空间。勾选后清理，全部进废纸篓，可恢复。")
+                    Text("这些应用已不在 /Applications，但它们的缓存、日志、偏好与家目录数据仍占着空间。勾选后清理，全部进废纸篓，可恢复。")
                         .font(Typo.f(Typo.xs))
                         .foregroundStyle(Theme.textMuted)
                 }
@@ -357,9 +478,14 @@ struct LeftoversView: View {
                                     .foregroundStyle(engine.selectedOrphans.contains(orphan.id) ? Theme.accent : Theme.textMuted)
                             }
                             .buttonStyle(.plain)
-                            Text(orphan.name)
-                                .font(Typo.f(Typo.sm, .medium))
-                                .foregroundStyle(Theme.textPrimary)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(orphan.name)
+                                    .font(Typo.f(Typo.sm, .medium))
+                                    .foregroundStyle(Theme.textPrimary)
+                                Text(orphan.subtitle)
+                                    .font(Typo.f(Typo.xs))
+                                    .foregroundStyle(Theme.textMuted)
+                            }
                             Spacer()
                             Text(orphan.size.sizeText)
                                 .font(Typo.mono(Typo.xs))
@@ -430,6 +556,12 @@ struct LeftoversView: View {
                 Text("扫描你指定的开发目录：缓存可放心清（会重新生成），整项目删除会连同源码进废纸篓，需逐条确认。")
                     .font(Typo.f(Typo.xs))
                     .foregroundStyle(Theme.textMuted)
+                if !devEngine.scanning, let at = devEngine.scannedAt,
+                   devEngine.cacheItems.isEmpty && devEngine.projects.isEmpty {
+                    Text("已于 \(timeText(at)) 完成扫描，当前扫描目录下没有发现构建缓存或项目。")
+                        .font(Typo.f(Typo.xs))
+                        .foregroundStyle(Theme.textMuted)
+                }
 
                 rootsEditor
                 devCacheSection
@@ -450,7 +582,7 @@ struct LeftoversView: View {
                 }
             }
             if devEngine.roots.isEmpty {
-                Text("还没有添加任何扫描目录。点「添加目录」选择你的项目所在位置（如 ~/Developer）。")
+                Text("还没有添加任何扫描目录。点「添加目录」选择你的项目所在位置，或从下面的建议里一键加入。")
                     .font(Typo.f(Typo.xs))
                     .foregroundStyle(Theme.textMuted)
             } else {
@@ -468,6 +600,7 @@ struct LeftoversView: View {
                         Button {
                             devEngine.removeRoot(root)
                             devEngine.scan()
+                            loadSuggestions()
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 13))
@@ -476,6 +609,37 @@ struct LeftoversView: View {
                         .buttonStyle(.plain)
                     }
                 }
+            }
+
+            // 建议：本机检测到的、还没纳入扫描的含项目目录
+            if !suggestions.isEmpty {
+                VStack(alignment: .leading, spacing: Space.s50) {
+                    Text("检测到这些目录里有项目，建议加入扫描：")
+                        .font(Typo.f(Typo.xs))
+                        .foregroundStyle(Theme.textMuted)
+                    ForEach(suggestions, id: \.path) { s in
+                        HStack(spacing: Space.s75) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.accent)
+                            Text(shortPath(s.path))
+                                .font(Typo.mono(Typo.xs))
+                                .foregroundStyle(Theme.textPrimary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Text("（\(s.projects) 个项目）")
+                                .font(Typo.f(Typo.xs))
+                                .foregroundStyle(Theme.textMuted)
+                            Spacer(minLength: Space.s100)
+                            SweepButton(.quiet, title: "加入") {
+                                devEngine.addRoot(s.path)
+                                devEngine.scan()
+                                loadSuggestions()
+                            }
+                        }
+                    }
+                }
+                .padding(.top, Space.s25)
             }
         }
     }
@@ -510,11 +674,16 @@ struct LeftoversView: View {
                         Image(systemName: "doc")
                             .font(.system(size: 10))
                             .foregroundStyle(Theme.textMuted)
-                        Text(shortPath(item.path))
-                            .font(Typo.mono(Typo.xs))
-                            .foregroundStyle(Theme.textPrimary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(shortPath(item.path))
+                                .font(Typo.mono(Typo.xs))
+                                .foregroundStyle(Theme.textPrimary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Text(DevLeftoverEngine.zhLabel(for: (item.path as NSString).lastPathComponent))
+                                .font(Typo.f(Typo.xs))
+                                .foregroundStyle(Theme.textMuted)
+                        }
                         Spacer(minLength: Space.s100)
                         Text(item.size.bytesText)
                             .font(Typo.mono(Typo.xs))
