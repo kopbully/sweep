@@ -296,11 +296,41 @@ final class UninstallEngine: ObservableObject {
 
     private struct AppSignature { let bundleID: String; let name: String }
 
-    /// 已知「已卸载但可能仍有 ~/Library 残留」的应用（清单模式，立即可用、安全可控）。
-    private static let knownOrphanApps = [
-        (bundleID: "ai.openclaw.mac", names: ["OpenClaw", "openclaw"]),
-        (bundleID: "com.nousresearch.hermes", names: ["Hermes", "hermes-desktop"]),
+    /// 已知「已卸载但可能仍有残留」的应用（清单模式，立即可用、安全可控）。
+    /// extraPaths 是 app 家目录下的扩展残留位置：CLI agent 常把数据放在
+    /// ~/.<name>、~/.cache/<name>、~/.local/bin/<name> 等点目录里，
+    /// 这些不在 leftoverDirs（~/Library）覆盖范围内，单独枚举。
+    private static let knownOrphanApps: [(bundleID: String, names: [String], extraPaths: [String])] = [
+        (bundleID: "ai.openclaw.mac", names: ["OpenClaw", "openclaw"], extraPaths: [
+            ".openclaw", ".clawdbot",
+            ".cache/openclaw", ".config/openclaw", ".local/share/openclaw", ".local/state/openclaw",
+            ".local/bin/openclaw", ".local/bin/openclaw-gateway",
+        ]),
+        (bundleID: "com.nousresearch.hermes", names: ["Hermes", "hermes-desktop"], extraPaths: [
+            ".hermes",
+            ".cache/hermes", ".config/hermes", ".local/share/hermes", ".local/state/hermes",
+            ".local/bin/hermes",
+        ]),
     ]
+
+    /// 检查一个家目录相对路径是否作为残留存在（含悬空符号链接）。
+    /// FileManager.fileExists 对悬空 symlink 返回 false，所以用 attributesOfItem（lstat 语义）。
+    private static func extraResidue(atRelative rel: String) -> AppObject? {
+        let full = NSHomeDirectory() + "/" + rel
+        let fm = FileManager.default
+        guard let attrs = try? fm.attributesOfItem(atPath: full) else { return nil }
+        guard let type = attrs[.type] as? FileAttributeType else { return nil }
+        let size: Int64
+        switch type {
+        case .typeDirectory:
+            size = Sizer.footprint(full)
+        default:
+            // 普通文件与符号链接（含悬空）都按自身字节计
+            size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
+        }
+        guard size > 0 else { return nil }
+        return AppObject(path: full, size: size)
+    }
 
     /// 该 bundle id / 名称对应的 app 是否仍存在于本机（已安装或正在运行）。
     private static func appStillPresent(bundleID: String, names: [String]) -> Bool {
@@ -336,10 +366,12 @@ final class UninstallEngine: ObservableObject {
     }
 
     /// 清单模式的孤儿残留：仅当 app 已确认不在本机时才呈现。
+    /// 命中范围 = ~/Library 各标准位置 + 该 app 的家目录扩展路径（点目录 / 死链 shim）。
     fileprivate static func knownOrphans() -> [OrphanApp] {
         knownOrphanApps.compactMap { entry in
             guard !appStillPresent(bundleID: entry.bundleID, names: entry.names) else { return nil }
-            let items = orphanLeftovers(for: entry.bundleID, names: entry.names)
+            var items = orphanLeftovers(for: entry.bundleID, names: entry.names)
+            items.append(contentsOf: entry.extraPaths.compactMap { extraResidue(atRelative: $0) })
             guard !items.isEmpty else { return nil }
             return OrphanApp(id: entry.bundleID, name: entry.names.first ?? entry.bundleID, items: items)
         }
