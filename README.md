@@ -186,6 +186,8 @@ Sweep 完全在本机运行、无遥测、不联网，开发与维护需要持�
 
 两项都走 `Remover.remove(mode: .trash)`，受 `PathSafety` 保护（~/Desktop、~/Documents、~/Library 等受保护目录不会越界）。扫描根持久化在 `UserDefaults`。命令行诊断：`SWEEP_DEV_PROBE=1`。本机验证：默认根命中 2 个 `.venv`（约 918 MB）与 8 个项目根。
 
+- **打包版本号不再滞后**：`Scripts/make_app.sh` 原来把 `CFBundleVersion` 硬编码成 `0.7.3`，导致后续发版打出来的包一直显示旧版本。现在从 README 最新变更条目自动读取版本号写进 `Info.plist`，以后加一条 changelog 就自动同步。
+
 ## 0.7.4 卸载模块：新增「已卸载应用残留」发现
 
 应用本体被拖走后，`~/Library` 里常残留 `Application Support`、`Logs`、`Caches`、`Preferences` 尾巴，旧版卸载只扫 `/Applications` 里的 `.app`，这些孤儿从未被入口发现。

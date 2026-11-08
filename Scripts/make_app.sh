@@ -11,6 +11,10 @@ swift build --disable-sandbox --cache-path .build/cache -c "$CONFIG" 2>&1 | tail
 BINARY=".build/${CONFIG}/Sweep"
 APP="Sweep.app"
 
+# 版本号跟随 README 最新变更条目，避免每次发版忘记同步 Info.plist
+VERSION="$(grep -m1 -oE '^## [0-9]+\.[0-9]+\.[0-9]+' README.md 2>/dev/null | awk '{print $2}' || true)"
+VERSION="${VERSION:-0.7.5}"
+
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 cp "$BINARY" "$APP/Contents/MacOS/Sweep"
@@ -19,7 +23,7 @@ ditto "Sources/Sweep/Resources/BlackHole" "$APP/Contents/Resources/BlackHole"
 ditto "Sources/Sweep/Resources/ThirdParty" "$APP/Contents/Resources/ThirdParty"
 [ -f "Sources/Sweep/Resources/AppIcon.icns" ] && cp "Sources/Sweep/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -31,9 +35,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key>
     <string>com.sweep.macos</string>
     <key>CFBundleVersion</key>
-    <string>0.7.3</string>
+    <string>${VERSION}</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.7.3</string>
+    <string>${VERSION}</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
