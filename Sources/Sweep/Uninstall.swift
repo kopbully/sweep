@@ -21,6 +21,14 @@ struct AppObject: Identifiable, Hashable {
     let size: Int64
 }
 
+/// 已卸载应用（孤儿）的残留聚合：一个 bundle id 对应若干 ~/Library 残留项。
+struct OrphanApp: Identifiable, Hashable {
+    let id: String            // bundle id；通用发现时为 generic:<位置>/<目录名>
+    let name: String
+    let items: [AppObject]
+    var size: Int64 { items.reduce(0) { $0 + $1.size } }
+}
+
 // MARK: - 引擎
 
 final class UninstallEngine: ObservableObject {
@@ -278,6 +286,159 @@ final class UninstallEngine: ObservableObject {
             }
         }
     }
+
+    // MARK: 已卸载应用残留（孤儿）
+
+    @Published var orphanBundles: [OrphanApp] = []
+    @Published var selectedOrphans: Set<String> = []
+    @Published var scanningOrphans = false
+    @Published var includeGenericOrphans = false
+
+    private struct AppSignature { let bundleID: String; let name: String }
+
+    /// 已知「已卸载但可能仍有 ~/Library 残留」的应用（清单模式，立即可用、安全可控）。
+    private static let knownOrphanApps = [
+        (bundleID: "ai.openclaw.mac", names: ["OpenClaw", "openclaw"]),
+        (bundleID: "com.nousresearch.hermes", names: ["Hermes", "hermes-desktop"]),
+    ]
+
+    /// 该 bundle id / 名称对应的 app 是否仍存在于本机（已安装或正在运行）。
+    private static func appStillPresent(bundleID: String, names: [String]) -> Bool {
+        if !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty { return true }
+        let roots = ["/Applications", NSHomeDirectory() + "/Applications"]
+        let fm = FileManager.default
+        for root in roots {
+            guard let kids = try? fm.contentsOfDirectory(atPath: root) else { continue }
+            for kid in kids {
+                let full = root + "/" + kid
+                if kid.hasSuffix(".app") {
+                    if let app = inspect(path: full), app.bundleID == bundleID { return true }
+                    if names.contains(where: { kid.lowercased().contains($0.lowercased()) }) { return true }
+                } else {
+                    var isDir: ObjCBool = false
+                    guard fm.fileExists(atPath: full, isDirectory: &isDir), isDir.boolValue,
+                          let sub = try? fm.contentsOfDirectory(atPath: full) else { continue }
+                    for s in sub where s.hasSuffix(".app") {
+                        if let app = inspect(path: full + "/" + s), app.bundleID == bundleID { return true }
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    /// 用只有 bundleID / 名称的占位 app 复用 findLeftovers，匹配该 app 的 ~/Library 残留。
+    private static func orphanLeftovers(for bundleID: String, names: [String]) -> [AppObject] {
+        let placeholder = InstalledApp(id: "orphan:" + bundleID, name: names.first ?? bundleID,
+                                       path: "", bundleID: bundleID, version: "", size: 0,
+                                       lastModified: .distantPast, needsAuth: false)
+        return findLeftovers(app: placeholder)
+    }
+
+    /// 清单模式的孤儿残留：仅当 app 已确认不在本机时才呈现。
+    fileprivate static func knownOrphans() -> [OrphanApp] {
+        knownOrphanApps.compactMap { entry in
+            guard !appStillPresent(bundleID: entry.bundleID, names: entry.names) else { return nil }
+            let items = orphanLeftovers(for: entry.bundleID, names: entry.names)
+            guard !items.isEmpty else { return nil }
+            return OrphanApp(id: entry.bundleID, name: entry.names.first ?? entry.bundleID, items: items)
+        }
+    }
+
+    /// 通用自动发现：扫描 ~/Library 各标准位置，反向匹配「已安装 app 签名」找出孤儿目录。
+    /// 实验性，由 UI 开关开启；即便有误判，删除也走废纸篓可恢复。
+    fileprivate static func discoverGenericOrphans(excluding knownIDs: Set<String>) -> [OrphanApp] {
+        let installed = installedSignatures()
+        let fm = FileManager.default
+        let protected = Set([
+            "Sweep", "com.sweep.macos",
+            "CloudDocs", "com.apple.CloudDocs",
+            "CallHistory", "Knowledge", "PersonalInformation", "IdentityServices",
+        ])
+        var collected: [OrphanApp] = []
+        for rel in leftoverDirs {
+            let dir = NSHomeDirectory() + "/" + rel
+            guard let kids = try? fm.contentsOfDirectory(atPath: dir) else { continue }
+            for kid in kids {
+                guard !protected.contains(kid) else { continue }
+                let full = dir + "/" + kid
+                let matched = installed.contains { matches(kid, bundleID: $0.bundleID, baseName: $0.name) }
+                guard !matched else { continue }
+                let size = Sizer.footprint(full)
+                guard size > 0 else { continue }
+                collected.append(OrphanApp(id: "generic:" + rel + "/" + kid,
+                                           name: kid, items: [AppObject(path: full, size: size)]))
+            }
+        }
+        return collected.filter { !knownIDs.contains($0.id) }
+    }
+
+    /// 已安装 app 的签名集合，供通用发现反向匹配。
+    private static func installedSignatures() -> [AppSignature] {
+        var sigs: [AppSignature] = []
+        for root in ["/Applications", NSHomeDirectory() + "/Applications"] {
+            guard let kids = try? FileManager.default.contentsOfDirectory(atPath: root) else { continue }
+            for kid in kids {
+                let full = root + "/" + kid
+                if kid.hasSuffix(".app") {
+                    if let app = inspect(path: full), !app.bundleID.isEmpty {
+                        sigs.append(AppSignature(bundleID: app.bundleID, name: app.name))
+                    }
+                } else {
+                    var isDir: ObjCBool = false
+                    guard FileManager.default.fileExists(atPath: full, isDirectory: &isDir), isDir.boolValue,
+                          let sub = try? FileManager.default.contentsOfDirectory(atPath: full) else { continue }
+                    for s in sub where s.hasSuffix(".app") {
+                        if let app = inspect(path: full + "/" + s), !app.bundleID.isEmpty {
+                            sigs.append(AppSignature(bundleID: app.bundleID, name: app.name))
+                        }
+                    }
+                }
+            }
+        }
+        return sigs
+    }
+
+    /// 加载已卸载应用的残留（孤儿）。includeGenericOrphans 开启通用自动发现。
+    func loadOrphans() {
+        guard !scanningOrphans else { return }
+        scanningOrphans = true
+        let includeGeneric = includeGenericOrphans
+        let known = Self.knownOrphans()
+        let knownIDs = Set(known.map(\.id))
+        DispatchQueue.global(qos: .userInitiated).async {
+            let generic = includeGeneric ? Self.discoverGenericOrphans(excluding: knownIDs) : []
+            let all = known + generic
+            DispatchQueue.main.async {
+                self.orphanBundles = all
+                self.scanningOrphans = false
+            }
+        }
+    }
+
+    func toggleOrphan(_ id: String) {
+        if selectedOrphans.contains(id) { selectedOrphans.remove(id) }
+        else { selectedOrphans.insert(id) }
+    }
+
+    /// 清理选中的孤儿残留（全部进废纸篓，可恢复）。
+    func removeSelectedOrphans() {
+        var paths: [String] = []
+        for id in selectedOrphans {
+            if let orphan = orphanBundles.first(where: { $0.id == id }) {
+                paths.append(contentsOf: orphan.items.map(\.path))
+            }
+        }
+        guard !paths.isEmpty else { return }
+        let bytes = orphanBundles.filter { selectedOrphans.contains($0.id) }
+            .reduce(0) { $0 + $1.size }
+        let res = Remover.remove(paths, mode: .trash)
+        OperationHistory.record(kind: .uninstall,
+                                summary: "清理已卸载应用残留 \(res.removed) 项",
+                                bytes: bytes, count: res.removed)
+        selectedOrphans.removeAll()
+        loadOrphans()
+    }
 }
 
 // MARK: - 只读诊断
@@ -285,6 +446,8 @@ final class UninstallEngine: ObservableObject {
 // SWEEP_UNINSTALL_PROBE=<.app 路径>：打印这台应用会被判定为残留的目录，不做任何删除。
 // SWEEP_UNINSTALL_PROBE_APPLY=1：额外真的走一遍卸载（仅限 ~/Applications 下的应用），
 // 用来在拿不到辅助功能权限的环境里核对匹配规则与删除链路。
+// SWEEP_ORPHAN_PROBE=1：打印「已卸载应用残留」的清单模式命中，不做任何删除。
+// SWEEP_ORPHAN_PROBE_GENERIC=1（配合上面）：额外打印通用自动发现命中。
 
 enum UninstallDiagnostics {
     static func run(appPath: String, apply: Bool) {
@@ -312,6 +475,25 @@ enum UninstallDiagnostics {
               + "failed=\(summary.failed.count) leftovers=\(summary.leftoverCount) "
               + "bytes=\(summary.total)")
         print("PROBE message=\(summary.message)")
+    }
+
+    /// SWEEP_ORPHAN_PROBE=1：打印已知清单与（开启 SWEEP_ORPHAN_PROBE_GENERIC=1 时）通用发现的孤儿残留，
+    /// 不做任何删除。用于在不开 GUI 的情况下核对匹配规则与体积。
+    static func runOrphans(generic: Bool) {
+        let known = UninstallEngine.knownOrphans()
+        print("ORPHAN_PROBE known=\(known.count)")
+        for o in known {
+            print("  \(o.name) [\(o.id)] bytes=\(o.size)")
+            for it in o.items { print("    \(it.size)\t\(it.path)") }
+        }
+        guard generic else { return }
+        let knownIDs = Set(known.map(\.id))
+        let gen = UninstallEngine.discoverGenericOrphans(excluding: knownIDs)
+        print("ORPHAN_PROBE generic=\(gen.count)")
+        for o in gen {
+            print("  \(o.name) [\(o.id)] bytes=\(o.size)")
+            for it in o.items { print("    \(it.size)\t\(it.path)") }
+        }
     }
 }
 
@@ -344,10 +526,14 @@ struct UninstallView: View {
                 if let message = engine.lastMessage { resultPanel(message) }
                 listPanel
                 if engine.leftoverAppName != nil { leftoverPanel }
+                if !engine.orphanBundles.isEmpty { orphanPanel }
             }
             .padding(Space.s300)
         }
-        .onAppear { if engine.apps.isEmpty && !engine.loading { engine.load() } }
+        .onAppear {
+            if engine.apps.isEmpty && !engine.loading { engine.load() }
+            if engine.orphanBundles.isEmpty && !engine.scanningOrphans { engine.loadOrphans() }
+        }
         .alert("确认卸载？", isPresented: $confirmUninstall) {
             Button("卸载所选", role: .destructive) { engine.uninstallSelected() }
             Button("取消", role: .cancel) {}
@@ -638,6 +824,89 @@ struct UninstallView: View {
                     .font(Typo.f(Typo.xs))
                     .foregroundStyle(Theme.textMuted)
                     .padding(.top, Space.s25)
+            }
+        }
+    }
+
+    private var orphanPanel: some View {
+        Panel {
+            VStack(alignment: .leading, spacing: Space.s100) {
+                HStack(spacing: Space.s75) {
+                    Image(systemName: "tray.full")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.accent)
+                    Text("已卸载应用的残留")
+                        .font(Typo.f(Typo.base, .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer()
+                    Toggle("通用发现（实验）", isOn: Binding(
+                        get: { engine.includeGenericOrphans },
+                        set: { engine.includeGenericOrphans = $0; engine.loadOrphans() }
+                    ))
+                    .font(Typo.f(Typo.xs))
+                    .foregroundStyle(Theme.textSecondary)
+                    if engine.scanningOrphans {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text("\(engine.orphanBundles.count) 个 · \(engine.orphanBundles.reduce(0) { $0 + $1.size }.sizeText)")
+                            .font(Typo.f(Typo.xs))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                }
+
+                Text("这些应用已不在 /Applications，但它们在 ~/Library 下的缓存、日志、偏好仍占着空间。勾选后清理，全部进废纸篓，可恢复。")
+                    .font(Typo.f(Typo.xs))
+                    .foregroundStyle(Theme.textMuted)
+
+                ForEach(engine.orphanBundles) { orphan in
+                    VStack(alignment: .leading, spacing: Space.s50) {
+                        HStack(spacing: Space.s75) {
+                            Button { engine.toggleOrphan(orphan.id) } label: {
+                                Image(systemName: engine.selectedOrphans.contains(orphan.id) ? "checkmark.square.fill" : "square")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(engine.selectedOrphans.contains(orphan.id) ? Theme.accent : Theme.textMuted)
+                            }
+                            .buttonStyle(.plain)
+                            Text(orphan.name)
+                                .font(Typo.f(Typo.sm, .medium))
+                                .foregroundStyle(Theme.textPrimary)
+                            Spacer()
+                            Text(orphan.size.sizeText)
+                                .font(Typo.mono(Typo.xs))
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                        ForEach(orphan.items) { item in
+                            HStack(spacing: Space.s100) {
+                                Image(systemName: "doc")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Theme.textMuted)
+                                Text(shortPath(item.path))
+                                    .font(Typo.mono(Typo.xs))
+                                    .foregroundStyle(Theme.textPrimary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer(minLength: Space.s100)
+                                Text(item.size.bytesText)
+                                    .font(Typo.mono(Typo.xs))
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .frame(width: 72, alignment: .trailing)
+                                SweepButton(.quiet, title: "显示") {
+                                    NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
+                                }
+                            }
+                            .padding(.vertical, 1)
+                            .padding(.leading, Space.s200)
+                        }
+                    }
+                    .padding(.vertical, Space.s50)
+                }
+
+                if !engine.selectedOrphans.isEmpty {
+                    SweepButton(.danger, title: "清理所选残留", systemImage: "trash") {
+                        engine.removeSelectedOrphans()
+                    }
+                    .padding(.top, Space.s50)
+                }
             }
         }
     }

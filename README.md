@@ -94,6 +94,8 @@ Sweep 是一个 **完全在本机运行** 的 macOS 空间管家，把「腾空�
 
 **卸载** — 列出 `/Applications` 与 `~/Applications` 应用，按 Bundle ID／应用名找出 `~/Library` 残留，本体与残留一起进废纸篓。
 
+**已卸载应用残留** — 应用本体被拖走后，`~/Library` 里往往还躺着 `Application Support`、`Logs`、`Caches`、`Preferences` 等尾巴。Sweep 用一份已知清单（已收录 OpenClaw、Hermes 等）先精准命中这些"孤儿"，并预留可选的通用自动发现（设置内为实验开关，默认关，避免把仍在用的 app 数据误判为残骸）。命中的残留同样走废纸篓，可恢复。
+
 </td></tr>
 </table>
 
@@ -172,6 +174,15 @@ Sweep 完全在本机运行、无遥测、不联网，开发与维护需要持�
 本项目以 **MIT 许可证** 开源（详见仓库根目录 `LICENSE` 文件）：你可以自由使用、修改、再分发本项目的源代码；若用于商业产品，请保留版权与许可声明。作者不对使用后果承担责任。
 
 如需其他授权方式（例如商业闭源授权、非商业限制），欢迎通过 Issues 联系。
+
+## 0.7.4 卸载模块：新增「已卸载应用残留」发现
+
+应用本体被拖走后，`~/Library` 里常残留 `Application Support`、`Logs`、`Caches`、`Preferences` 尾巴，旧版卸载只扫 `/Applications` 里的 `.app`，这些孤儿从未被入口发现。
+
+- 新增 `OrphanApp` 与 `UninstallEngine` 的孤儿扫描：`knownOrphans()` 用一份已知清单先精准命中（已收录 `ai.openclaw.mac` / OpenClaw、`com.nousresearch.hermes` / Hermes）。
+- 预留 `discoverGenericOrphans(excluding:)` 通用自动发现，仅在 UI「通用发现（实验）」开关打开时启用——默认关，避免把仍在用的 app 数据误判为残骸（实测通用模式会命中大量活跃 app 的 Support 目录）。
+- 命中的残留走废纸篓（`Remover.remove`），与卸载本体一致、可恢复。
+- 命令行诊断入口：`SWEEP_ORPHAN_PROBE=1` 打印清单命中，`SWEEP_ORPHAN_PROBE_GENERIC=1` 额外打印通用发现。本机验证：OpenClaw 约 168 KB、Hermes 约 4.4 MB 残留均被正确命中。
 
 ## 0.7.3 数据：稀疏文件不再虚报体积
 

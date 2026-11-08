@@ -27,6 +27,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             UninstallDiagnostics.run(appPath: probe, apply: apply)
             exit(0)
         }
+        if ProcessInfo.processInfo.environment["SWEEP_ORPHAN_PROBE"] != nil {
+            let generic = ProcessInfo.processInfo.environment["SWEEP_ORPHAN_PROBE_GENERIC"] == "1"
+            UninstallDiagnostics.runOrphans(generic: generic)
+            exit(0)
+        }
         // 每个进程都会创建自己的桌面黑洞面板，第二个实例只会让桌面上多出一个
         // 重复的悬浮窗。这里只保留最先启动的进程，其余实例唤起已有窗口后退出。
         if ProcessInfo.processInfo.environment["SWEEP_ALLOW_MULTI_INSTANCE"] == "1" { return }
