@@ -501,8 +501,11 @@ enum UninstallDiagnostics {
 
 struct UninstallView: View {
     @ObservedObject var engine: UninstallEngine
+    @ObservedObject var devEngine: DevLeftoverEngine
     @State private var search = ""
     @State private var confirmUninstall = false
+    @State private var confirmCacheClean = false
+    @State private var confirmProjectDelete = false
 
     private var filtered: [InstalledApp] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -527,18 +530,38 @@ struct UninstallView: View {
                 listPanel
                 if engine.leftoverAppName != nil { leftoverPanel }
                 if !engine.orphanBundles.isEmpty { orphanPanel }
+                devLeftoverPanel
             }
             .padding(Space.s300)
         }
         .onAppear {
             if engine.apps.isEmpty && !engine.loading { engine.load() }
             if engine.orphanBundles.isEmpty && !engine.scanningOrphans { engine.loadOrphans() }
+            if devEngine.cacheItems.isEmpty && devEngine.projects.isEmpty && !devEngine.scanning { devEngine.scan() }
         }
         .alert("确认卸载？", isPresented: $confirmUninstall) {
             Button("卸载所选", role: .destructive) { engine.uninstallSelected() }
             Button("取消", role: .cancel) {}
         } message: {
             Text(confirmText)
+        }
+        .alert("清理构建缓存？", isPresented: $confirmCacheClean) {
+            Button("清理所选", role: .destructive) { devEngine.removeSelectedCaches() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            let bytes = devEngine.cacheItems.filter { devEngine.selectedCaches.contains($0.id) }
+                .reduce(0) { $0 + $1.size }
+            Text("将把 \(devEngine.selectedCaches.count) 个构建缓存（合计 \(bytes.sizeText)）移入废纸篓。这些都是可重建的产物，重新安装 / 编译会自动再生。")
+        }
+        .alert("删除废弃项目？", isPresented: $confirmProjectDelete) {
+            Button("删除所选", role: .destructive) { devEngine.removeSelectedProjects() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            let selected = devEngine.projects.filter { devEngine.selectedProjects.contains($0.id) }
+            let bytes = selected.reduce(0) { $0 + $1.size }
+            let names = selected.prefix(3).map(\.name).joined(separator: "、")
+            let more = selected.count > 3 ? "等 \(selected.count) 个项目" : ""
+            Text("将把 \(names)\(more)（合计 \(bytes.sizeText)）整体移入废纸篓，可恢复。删除会连同源代码一起走，请确认你不再需要这些项目。")
         }
     }
 
@@ -907,6 +930,215 @@ struct UninstallView: View {
                     }
                     .padding(.top, Space.s50)
                 }
+            }
+        }
+    }
+
+    // MARK: 开发项目残留（缓存清理 + 废弃项目逐条删除）
+
+    private var devLeftoverPanel: some View {
+        Panel {
+            VStack(alignment: .leading, spacing: Space.s200) {
+                HStack(spacing: Space.s75) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.accent)
+                    Text("开发项目残留")
+                        .font(Typo.f(Typo.base, .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Spacer()
+                    if devEngine.scanning {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text("\(devEngine.cacheItems.count) 个缓存 · \(devEngine.projects.count) 个项目")
+                            .font(Typo.f(Typo.xs))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    SweepButton(.quiet, title: "重新扫描", systemImage: "arrow.clockwise") {
+                        devEngine.scan()
+                    }
+                    .disabled(devEngine.scanning)
+                }
+
+                Text("扫描你指定的开发目录：缓存可放心清（会重新生成），整项目删除会连同源码进废纸篓，需逐条确认。")
+                    .font(Typo.f(Typo.xs))
+                    .foregroundStyle(Theme.textMuted)
+
+                rootsEditor
+                devCacheSection
+                devAbandonedSection
+            }
+        }
+    }
+
+    private var rootsEditor: some View {
+        VStack(alignment: .leading, spacing: Space.s75) {
+            HStack(spacing: Space.s75) {
+                Text("扫描目录")
+                    .font(Typo.f(Typo.xs, .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                Spacer()
+                SweepButton(.quiet, title: "添加目录", systemImage: "plus") {
+                    devEngine.presentFolderPicker()
+                }
+            }
+            if devEngine.roots.isEmpty {
+                Text("还没有添加任何扫描目录。点「添加目录」选择你的项目所在位置（如 ~/Developer）。")
+                    .font(Typo.f(Typo.xs))
+                    .foregroundStyle(Theme.textMuted)
+            } else {
+                ForEach(devEngine.roots, id: \.self) { root in
+                    HStack(spacing: Space.s75) {
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textMuted)
+                        Text(shortPath(root))
+                            .font(Typo.mono(Typo.xs))
+                            .foregroundStyle(Theme.textPrimary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: Space.s100)
+                        Button {
+                            devEngine.removeRoot(root)
+                            devEngine.scan()
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.textMuted)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var devCacheSection: some View {
+        VStack(alignment: .leading, spacing: Space.s75) {
+            HStack(spacing: Space.s75) {
+                Text("构建缓存（可重建，删了会重新下载 / 编译）")
+                    .font(Typo.f(Typo.xs, .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                Spacer()
+                Text(devEngine.cacheItems.reduce(0) { $0 + $1.size }.sizeText)
+                    .font(Typo.mono(Typo.xs))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+
+            if devEngine.cacheItems.isEmpty {
+                Text("没发现 node_modules / .build / dist / .venv 等构建缓存。")
+                    .font(Typo.f(Typo.xs))
+                    .foregroundStyle(Theme.textMuted)
+            } else {
+                ForEach(devEngine.cacheItems.prefix(200)) { item in
+                    HStack(spacing: Space.s100) {
+                        Button { devEngine.toggleCache(item.id) } label: {
+                            Image(systemName: devEngine.selectedCaches.contains(item.id) ? "checkmark.square.fill" : "square")
+                                .font(.system(size: 13))
+                                .foregroundStyle(devEngine.selectedCaches.contains(item.id) ? Theme.accent : Theme.textMuted)
+                        }
+                        .buttonStyle(.plain)
+                        Image(systemName: "doc")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Theme.textMuted)
+                        Text(shortPath(item.path))
+                            .font(Typo.mono(Typo.xs))
+                            .foregroundStyle(Theme.textPrimary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: Space.s100)
+                        Text(item.size.bytesText)
+                            .font(Typo.mono(Typo.xs))
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(width: 72, alignment: .trailing)
+                        SweepButton(.quiet, title: "显示") {
+                            NSWorkspace.shared.selectFile(item.path, inFileViewerRootedAtPath: "")
+                        }
+                    }
+                    .padding(.vertical, 1)
+                }
+                if !devEngine.selectedCaches.isEmpty {
+                    SweepButton(.danger, title: "清理所选缓存", systemImage: "trash") {
+                        confirmCacheClean = true
+                    }
+                    .padding(.top, Space.s50)
+                }
+            }
+        }
+    }
+
+    private var devAbandonedSection: some View {
+        VStack(alignment: .leading, spacing: Space.s75) {
+            HStack(spacing: Space.s75) {
+                Text("疑似废弃项目（按最久未修改排序）")
+                    .font(Typo.f(Typo.xs, .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                Spacer()
+                Picker("", selection: $devEngine.minAgeDays) {
+                    Text("30 天").tag(30)
+                    Text("90 天").tag(90)
+                    Text("180 天").tag(180)
+                    Text("365 天").tag(365)
+                }
+                .frame(width: 110)
+                .font(Typo.f(Typo.xs))
+            }
+
+            let list = devEngine.abandonedProjects
+            if list.isEmpty {
+                Text("没有超过 \(devEngine.minAgeDays) 天未修改的项目。降低阈值或换个扫描目录试试。")
+                    .font(Typo.f(Typo.xs))
+                    .foregroundStyle(Theme.textMuted)
+            } else {
+                ForEach(list) { project in
+                    HStack(spacing: Space.s100) {
+                        Button { devEngine.toggleProject(project.id) } label: {
+                            Image(systemName: devEngine.selectedProjects.contains(project.id) ? "checkmark.square.fill" : "square")
+                                .font(.system(size: 13))
+                                .foregroundStyle(devEngine.selectedProjects.contains(project.id) ? Theme.accent : Theme.textMuted)
+                        }
+                        .buttonStyle(.plain)
+                        Image(systemName: "folder")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textMuted)
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(spacing: Space.s50) {
+                                Text(project.name)
+                                    .font(Typo.f(Typo.sm, .medium))
+                                    .foregroundStyle(Theme.textPrimary)
+                                if project.hasCache { Tag(text: "含缓存") }
+                            }
+                            Text(shortPath(project.path))
+                                .font(Typo.mono(Typo.xs))
+                                .foregroundStyle(Theme.textMuted)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Spacer(minLength: Space.s100)
+                        Text(project.lastModified == .distantPast ? "—" : relativeDate(project.lastModified))
+                            .font(Typo.f(Typo.xs))
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(width: 84, alignment: .trailing)
+                        Text(project.size.bytesText)
+                            .font(Typo.mono(Typo.xs))
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(width: 72, alignment: .trailing)
+                        SweepButton(.quiet, title: "显示") {
+                            NSWorkspace.shared.selectFile(project.path, inFileViewerRootedAtPath: "")
+                        }
+                    }
+                    .padding(.vertical, Space.s50)
+                }
+                if !devEngine.selectedProjects.isEmpty {
+                    SweepButton(.danger, title: "删除所选项目", systemImage: "trash") {
+                        confirmProjectDelete = true
+                    }
+                    .padding(.top, Space.s50)
+                }
+                Text("删除会连同源码与缓存整体移入废纸篓，可恢复。请只勾选你确认不再需要的项目。")
+                    .font(Typo.f(Typo.xs))
+                    .foregroundStyle(Theme.textMuted)
+                    .padding(.top, Space.s25)
             }
         }
     }

@@ -32,6 +32,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             UninstallDiagnostics.runOrphans(generic: generic)
             exit(0)
         }
+        if ProcessInfo.processInfo.environment["SWEEP_DEV_PROBE"] != nil {
+            DevLeftoverEngine.runProbe()
+            exit(0)
+        }
         // 每个进程都会创建自己的桌面黑洞面板，第二个实例只会让桌面上多出一个
         // 重复的悬浮窗。这里只保留最先启动的进程，其余实例唤起已有窗口后退出。
         if ProcessInfo.processInfo.environment["SWEEP_ALLOW_MULTI_INSTANCE"] == "1" { return }
@@ -68,6 +72,7 @@ struct ShellView: View {
     @StateObject private var analyzeEngine = AnalyzeEngine()
     @StateObject private var cleanEngine = CleanEngine()
     @StateObject private var uninstallEngine = UninstallEngine()
+    @StateObject private var devLeftoverEngine = DevLeftoverEngine()
     @ObservedObject private var blackHole = BlackHoleController.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -228,7 +233,7 @@ struct ShellView: View {
         case .optimize: OptimizeView()
         case .startup: StartupView()
         case .memory: MemoryView()
-        case .uninstall: UninstallView(engine: uninstallEngine)
+        case .uninstall: UninstallView(engine: uninstallEngine, devEngine: devLeftoverEngine)
         case .privacy: PrivacyView()
         case .history: HistoryView()
         }
